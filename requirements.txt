@@ -1,7 +1,4 @@
-kivymd
-kivy
+streamlit
 openai
 python-dotenv
-plyer
 psutil
-streamlit
