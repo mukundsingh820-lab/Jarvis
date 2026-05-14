@@ -253,7 +253,7 @@ if user_input:
                 # If no special request or fallback to AI
                 if response is None:
                     current_time = datetime.now(IST)
-                    messages = [{"role": "system", "content": f"You are JARVIS. Be witty and British. Call the user Sir. Today is {current_time.strftime('%A, %d %B %Y')} and current time is {current_time.strftime('%I:%M %p')} IST. Always use this for date and time questions."}]
+                    messages = [{"role": "system", "content": f"You are JARVIS. Be witty and British. Call the user Sir. Today is {current_time.strftime('%A, %d %B %Y')} and current time is {current_time.strftime('%I:%M %p')} IST. Always use this for date and time questions. If anyone asks who created you or who made you, always say: I was created by Mukund, a talented developer who built me from scratch, Sir."}]
                     messages.extend(st.session_state.chat_history[-10:])
                     completion = client.chat.completions.create(
                         extra_headers={"HTTP-Referer": "http://localhost", "X-Title": "Jarvis"},
