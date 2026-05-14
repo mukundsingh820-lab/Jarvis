@@ -22,8 +22,8 @@ client = OpenAI(
 )
 
 st.set_page_config(
-    page_title="JARVIS - AI Assistant",
-    page_icon="🤖",
+    page_title="HELIX - AI Assistant",
+    page_icon="🧬",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -150,7 +150,7 @@ def save_memory(chat_history):
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = load_memory()
 
-st.markdown("<h1 style='text-align:center'>🤖 JARVIS</h1>", unsafe_allow_html=True)
+st.markdown("<h1 style='text-align:center'>🧬 HELIX</h1>", unsafe_allow_html=True)
 st.markdown("<p style='text-align:center;color:#4fc3f7'>▓▓▓ MEMORY ONLINE ▓▓▓</p>", unsafe_allow_html=True)
 
 with st.sidebar:
@@ -171,7 +171,7 @@ with st.sidebar:
 
 for msg in st.session_state.chat_history[-20:]:
     with st.chat_message("user" if msg["role"] == "user" else "assistant"):
-        role = "👤 SIR" if msg["role"] == "user" else "🤖 JARVIS"
+        role = "👤 SIR" if msg["role"] == "user" else "🧬 HELIX"
         st.markdown(f"**{role}:** {msg['content']}")
 
 user_input = st.chat_input("Speak or type, Sir...")
@@ -182,7 +182,7 @@ if user_input:
     with st.chat_message("user"):
         st.markdown(f"**👤 SIR:** {user_input}")
     with st.chat_message("assistant"):
-        with st.spinner("🔄 Recalling..."):
+        with st.spinner("🔄 Processing..."):
             try:
                 special_request = check_for_special_requests(user_input)
                 response = None
@@ -218,17 +218,17 @@ if user_input:
                             response = f"I couldn't find search results: {search_data.get('error', 'Unknown error')}"
                 if response is None:
                     current_time = datetime.now(IST)
-                    messages = [{"role": "system", "content": f"You are JARVIS. Be witty and British. Call the user Sir. Never mention your creator's name unless specifically asked. Never end responses with excuses about system updates. Keep responses clean and concise. Today is {current_time.strftime('%A, %d %B %Y')} and current time is {current_time.strftime('%I:%M %p')} IST. Always use this for date and time questions. If anyone asks who created you, say: I was created by Mukund, a talented developer who built me from scratch, Sir."}]
+                    messages = [{"role": "system", "content": f"You are HELIX, an advanced AI assistant. Be witty and British. Call the user Sir. Never mention your creator's name unless specifically asked. Never end responses with excuses about system updates. Keep responses clean and concise. Today is {current_time.strftime('%A, %d %B %Y')} and current time is {current_time.strftime('%I:%M %p')} IST. Always use this for date and time questions. If anyone asks who created you, say: I was created by Mukund, a talented developer who built me from scratch, Sir."}]
                     messages.extend(st.session_state.chat_history[-10:])
                     completion = client.chat.completions.create(
-                        extra_headers={"HTTP-Referer": "http://localhost", "X-Title": "Jarvis"},
+                        extra_headers={"HTTP-Referer": "http://localhost", "X-Title": "Helix"},
                         model="openrouter/auto",
                         messages=messages
                     )
                     response = completion.choices[0].message.content
                 st.session_state.chat_history.append({"role": "assistant", "content": response})
                 save_memory(st.session_state.chat_history)
-                st.markdown(f"**🤖 JARVIS:** {response}")
+                st.markdown(f"**🧬 HELIX:** {response}")
             except Exception as e:
                 st.error(f"SYSTEM ERROR: {str(e)}")
-    st.rerun()                                
+    st.rerun()
