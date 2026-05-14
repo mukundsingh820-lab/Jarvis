@@ -22,7 +22,7 @@ client = OpenAI(
 )
 
 st.set_page_config(
-    page_title="JARVIS - AI Assistant",
+    page_title="Maxmus- AI Assistant",
     page_icon="🤖",
     layout="wide",
     initial_sidebar_state="expanded",
