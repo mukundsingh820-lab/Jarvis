@@ -250,7 +250,7 @@ if user_input:
                 
                 # If no special request or fallback to AI
                 if response is None:
-                    messages = [{"role": "system", "content": "You are JARVIS. Be witty and British. Call the user Sir. You have access to real-time weather, news, and web search features."}]
+                    messages = [{"role": "system", "content": f"You are JARVIS. Be witty and British. Call the user Sir. Today is {datetime.now().strftime('%A, %d %B %Y')} and current time is {datetime.now().strftime('%I:%M %p')} IST. Always use this for date and time questions."}]
                     messages.extend(st.session_state.chat_history[-10:])
                     completion = client.chat.completions.create(
                         extra_headers={"HTTP-Referer": "http://localhost", "X-Title": "Jarvis"},
