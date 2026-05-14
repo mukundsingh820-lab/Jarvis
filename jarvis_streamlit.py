@@ -22,7 +22,7 @@ client = OpenAI(
 )
 
 st.set_page_config(
-    page_title="Maxmus- AI Assistant",
+    page_title="JARVIS - AI Assistant",
     page_icon="🤖",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -39,9 +39,7 @@ st.markdown("""
 MEMORY_FILE = "jarvis_memory.json"
 IST = pytz.timezone('Asia/Kolkata')
 
-# Weather API using wttr.in
 def get_weather(location="London"):
-    """Fetch weather data from wttr.in API"""
     try:
         response = requests.get(f"https://wttr.in/{location}?format=j1", timeout=5)
         if response.status_code == 200:
@@ -59,18 +57,14 @@ def get_weather(location="London"):
         return {"error": str(e)}
     return {"error": "Could not fetch weather data"}
 
-# News API using newsapi.org
 def get_news(query="latest", country="us"):
-    """Fetch news headlines from newsapi.org"""
     try:
         if not news_api_key:
             return {"error": "NEWS_API_KEY not configured"}
-        
         if query == "latest":
             url = f"https://newsapi.org/v2/top-headlines?country={country}&apiKey={news_api_key}"
         else:
             url = f"https://newsapi.org/v2/everything?q={query}&sortBy=publishedAt&language=en&apiKey={news_api_key}"
-        
         response = requests.get(url, timeout=5)
         if response.status_code == 200:
             data = response.json()
@@ -89,23 +83,14 @@ def get_news(query="latest", country="us"):
         return {"error": str(e)}
     return {"error": "Could not fetch news"}
 
-# Web Search using DuckDuckGo
 def web_search(query):
-    """Search the web using DuckDuckGo API"""
     try:
         url = "https://api.duckduckgo.com/"
-        params = {
-            "q": query,
-            "format": "json",
-            "pretty": 1,
-            "no_redirect": 1
-        }
+        params = {"q": query, "format": "json", "pretty": 1, "no_redirect": 1}
         response = requests.get(url, params=params, timeout=5)
         if response.status_code == 200:
             data = response.json()
             results = []
-            
-            # Get results from RelatedTopics
             if 'RelatedTopics' in data:
                 for topic in data['RelatedTopics'][:5]:
                     if 'Text' in topic:
@@ -114,48 +99,35 @@ def web_search(query):
                             "url": topic.get('FirstURL', ''),
                             "snippet": topic.get('Text', '')
                         })
-            
-            # Get Abstract if available
             if data.get('AbstractText'):
                 results.insert(0, {
                     "title": data.get('Heading', 'Search Result'),
                     "url": data.get('AbstractURL', ''),
                     "snippet": data.get('AbstractText', '')
                 })
-            
             return {"results": results[:5]} if results else {"error": "No results found"}
     except Exception as e:
         return {"error": str(e)}
     return {"error": "Could not perform web search"}
 
 def check_for_special_requests(user_input):
-    """Check if user input is a special request (weather, news, web search)"""
     user_lower = user_input.lower()
-    
-    # Weather request detection
     if any(word in user_lower for word in ["weather", "temperature", "forecast", "climate", "rain", "snow"]):
-        # Extract location if mentioned
         location = "London"
         if "in " in user_lower:
             parts = user_lower.split("in ")
             if len(parts) > 1:
                 location = parts[1].split()[0].capitalize()
         return {"type": "weather", "location": location}
-    
-    # News request detection
     if any(word in user_lower for word in ["news", "headlines", "latest news", "breaking"]):
         query = "latest"
-        if any(word in user_lower for word in ["about", "regarding", "on", "for"]):
-            # Try to extract topic
-            for word in ["about", "regarding", "on", "for"]:
-                if word in user_lower:
-                    parts = user_lower.split(word)
-                    if len(parts) > 1:
-                        query = parts[1].strip()
-                        break
+        for word in ["about", "regarding", "on", "for"]:
+            if word in user_lower:
+                parts = user_lower.split(word)
+                if len(parts) > 1:
+                    query = parts[1].strip()
+                    break
         return {"type": "news", "query": query}
-    
-    # Web search detection
     if any(word in user_lower for word in ["search", "find", "look up", "google", "web", "lookup"]):
         search_query = user_input
         for phrase in ["search for", "search", "find", "look up", "lookup"]:
@@ -163,7 +135,6 @@ def check_for_special_requests(user_input):
                 search_query = user_input.split(phrase, 1)[1].strip()
                 break
         return {"type": "search", "query": search_query}
-    
     return None
 
 def load_memory():
@@ -213,10 +184,8 @@ if user_input:
     with st.chat_message("assistant"):
         with st.spinner("🔄 Recalling..."):
             try:
-                # Check for special requests
                 special_request = check_for_special_requests(user_input)
                 response = None
-                
                 if special_request:
                     if special_request["type"] == "weather":
                         weather_data = get_weather(special_request["location"])
@@ -228,7 +197,6 @@ if user_input:
 - 💨 Wind Speed: {weather_data['wind_speed']} km/h"""
                         else:
                             response = f"I couldn't fetch weather data: {weather_data['error']}"
-                    
                     elif special_request["type"] == "news":
                         news_data = get_news(special_request["query"])
                         if "articles" in news_data:
@@ -237,7 +205,6 @@ if user_input:
                                 response += f"{i}. **{article['title']}**\n   Source: {article['source']}\n   {article['description']}\n   [Read more]({article['url']})\n\n"
                         else:
                             response = f"I couldn't fetch news: {news_data.get('error', 'Unknown error')}"
-                    
                     elif special_request["type"] == "search":
                         search_data = web_search(special_request["query"])
                         if "results" in search_data:
@@ -249,23 +216,19 @@ if user_input:
                                     response += f"{i}. {result['snippet']}\n\n"
                         else:
                             response = f"I couldn't find search results: {search_data.get('error', 'Unknown error')}"
-                
-                # If no special request or fallback to AI
                 if response is None:
                     current_time = datetime.now(IST)
-                    messages = [{"role": "system", "content": f"You are JARVIS. Be witty and British. Call the user Sir. Never mention your creator's name unless specifically asked. Never end responses with excuses about system updates. Keep responses clean and concise. Today is {current_time.strftime('%A, %d %B %Y')} and current time is {current_time.strftime('%I:%M %p')} IST. Always use this for date and time questions. If anyone asks who created you, say: I was created by Mukund, a talented developer who built me from scratch, Sir."
-                                }]
-                                messages.extend(st.session_state.chat_history[-10:])
+                    messages = [{"role": "system", "content": f"You are JARVIS. Be witty and British. Call the user Sir. Never mention your creator's name unless specifically asked. Never end responses with excuses about system updates. Keep responses clean and concise. Today is {current_time.strftime('%A, %d %B %Y')} and current time is {current_time.strftime('%I:%M %p')} IST. Always use this for date and time questions. If anyone asks who created you, say: I was created by Mukund, a talented developer who built me from scratch, Sir."}]
+                    messages.extend(st.session_state.chat_history[-10:])
                     completion = client.chat.completions.create(
                         extra_headers={"HTTP-Referer": "http://localhost", "X-Title": "Jarvis"},
                         model="openrouter/auto",
                         messages=messages
                     )
                     response = completion.choices[0].message.content
-                
                 st.session_state.chat_history.append({"role": "assistant", "content": response})
                 save_memory(st.session_state.chat_history)
                 st.markdown(f"**🤖 JARVIS:** {response}")
             except Exception as e:
                 st.error(f"SYSTEM ERROR: {str(e)}")
-    st.rerun()
+    st.rerun()                                
