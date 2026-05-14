@@ -1,6 +1,7 @@
 import os
 import json
 import requests
+import pytz
 from datetime import datetime
 from dotenv import load_dotenv
 import streamlit as st
@@ -36,6 +37,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 MEMORY_FILE = "jarvis_memory.json"
+IST = pytz.timezone('Asia/Kolkata')
 
 # Weather API using wttr.in
 def get_weather(location="London"):
@@ -182,7 +184,7 @@ st.markdown("<p style='text-align:center;color:#4fc3f7'>▓▓▓ MEMORY ONLINE 
 
 with st.sidebar:
     st.markdown("### SYSTEM STATUS")
-    st.write(f"🕐 {datetime.now().strftime('%H:%M:%S')}")
+    st.write(f"🕐 {datetime.now(IST).strftime('%H:%M:%S IST')}")
     st.write(f"💾 RAM: {psutil.virtual_memory().percent}%")
     st.write(f"⚙️ CPU: {psutil.cpu_percent()}%")
     st.divider()
@@ -250,7 +252,8 @@ if user_input:
                 
                 # If no special request or fallback to AI
                 if response is None:
-                    messages = [{"role": "system", "content": f"You are JARVIS. Be witty and British. Call the user Sir. Today is {datetime.now().strftime('%A, %d %B %Y')} and current time is {datetime.now().strftime('%I:%M %p')} IST. Always use this for date and time questions."}]
+                    current_time = datetime.now(IST)
+                    messages = [{"role": "system", "content": f"You are JARVIS. Be witty and British. Call the user Sir. Today is {current_time.strftime('%A, %d %B %Y')} and current time is {current_time.strftime('%I:%M %p')} IST. Always use this for date and time questions."}]
                     messages.extend(st.session_state.chat_history[-10:])
                     completion = client.chat.completions.create(
                         extra_headers={"HTTP-Referer": "http://localhost", "X-Title": "Jarvis"},
