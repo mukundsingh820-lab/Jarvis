@@ -159,19 +159,28 @@ def web_search(query):
 
 def calculate(expression):
     try:
-        # Clean the expression
-        expr = expression.lower()
+        expr = expression.lower().strip()
         expr = expr.replace("x", "*").replace("^", "**")
-        expr = expr.replace("sqrt", "math.sqrt")
         expr = expr.replace("pi", str(math.pi))
+        expr = expr.replace("square root of", "math.sqrt")
+        expr = expr.replace("sqrt of", "math.sqrt")
+        expr = expr.replace("sqrt", "math.sqrt")
         expr = expr.replace("sin", "math.sin")
         expr = expr.replace("cos", "math.cos")
         expr = expr.replace("tan", "math.tan")
         expr = expr.replace("log", "math.log10")
-        # Only allow safe characters
-        if re.match(r'^[\d\s\+\-\*\/\.\(\)math\.sqrtsincotaglo\%\*\*piе]+$', expr):
-            result = eval(expr)
-            return {"result": round(result, 6)}
+        expr = re.sub(r'math\.sqrt\s+(\d+)', r'math.sqrt(\1)', expr)
+        expr = re.sub(r'math\.sqrt\s*\((\d+)\)', r'math.sqrt(\1)', expr)
+        allowed = re.sub(r'[0-9\s\+\-\*\/\.\(\)e]', '', 
+                  expr.replace("math.sqrt", "")
+                      .replace("math.sin", "")
+                      .replace("math.cos", "")
+                      .replace("math.tan", "")
+                      .replace("math.log10", "")
+                      .replace("math.pi", ""))
+        if allowed == "":
+            result = eval(expr, {"__builtins__": {}}, {"math": math})
+            return {"result": round(float(result), 6)}
         return {"error": "Invalid expression"}
     except Exception as e:
         return {"error": str(e)}
@@ -179,11 +188,16 @@ def calculate(expression):
 def check_for_special_requests(user_input):
     user_lower = user_input.lower()
 
-    # Calculator detection
-    calc_keywords = ["calculate", "what is", "compute", "solve", "=", "plus", "minus", "multiply", "divide"]
     math_pattern = re.search(r'[\d]+[\s]*[\+\-\*\/\^][\s]*[\d]+', user_input)
-    if math_pattern or any(word in user_lower for word in ["calculate", "compute", "sqrt", "square root"]):
-        expr = re.search(r'[\d\s\+\-\*\/\.\(\)\^sqrt]+', user_input)
+    sqrt_pattern = re.search(r'(square root of|sqrt\s+of|sqrt)\s*[\d]+', user_lower)
+    if math_pattern or sqrt_pattern or any(word in user_lower for word in ["calculate", "compute"]):
+        if sqrt_pattern:
+            num = re.search(r'[\d]+', sqrt_pattern.group())
+            if num:
+                return {"type": "calculator", "expression": f"math.sqrt({num.group()})"}
+        if math_pattern:
+            return {"type": "calculator", "expression": math_pattern.group().strip()}
+        expr = re.search(r'[\d\s\+\-\*\/\.\(\)\^]+', user_input)
         if expr:
             return {"type": "calculator", "expression": expr.group().strip()}
 
@@ -298,7 +312,6 @@ if user_input:
                         response = f"🧮 **Calculation Result:**\n\n`{special_request['expression']}` = **{calc_result['result']}**"
                     else:
                         response = f"I couldn't calculate that: {calc_result.get('error', 'Unknown error')}"
-
                 elif special_request["type"] == "weather":
                     weather_data = get_weather(special_request["location"])
                     if "error" not in weather_data:
@@ -309,7 +322,6 @@ if user_input:
 - 💨 Wind Speed: {weather_data['wind_speed']} km/h"""
                     else:
                         response = f"I couldn't fetch weather data: {weather_data['error']}"
-
                 elif special_request["type"] == "news":
                     news_data = get_news(special_request["query"])
                     if "articles" in news_data:
@@ -318,7 +330,6 @@ if user_input:
                             response += f"{i}. **{article['title']}**\n   Source: {article['source']}\n   {article['description']}\n   [Read more]({article['url']})\n\n"
                     else:
                         response = f"I couldn't fetch news: {news_data.get('error', 'Unknown error')}"
-
                 elif special_request["type"] == "search":
                     search_data = web_search(special_request["query"])
                     if "results" in search_data:
@@ -343,7 +354,6 @@ if user_input:
                     )
                     response = completion.choices[0].message.content
 
-                    # Auto web search if Helix is unsure
                     if auto_web_search_needed(response):
                         with st.spinner("🔎 Searching the web..."):
                             search_data = web_search(user_input)
