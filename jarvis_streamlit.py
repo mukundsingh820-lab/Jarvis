@@ -80,44 +80,31 @@ st.markdown(f"""
             border-radius: 20px !important;
             border: 1px solid {accent_color} !important;
         }}
-        .thinking-container {{
+
+        /* Spinning Ring Animation */
+        .helix-thinking {{
             display: flex;
+            justify-content: left;
             align-items: center;
-            gap: 12px;
             padding: 10px;
         }}
-        .thinking-star {{
-            width: 28px;
-            height: 28px;
-            color: {accent_color};
-            animation: spin 1.2s linear infinite;
-            font-size: 24px;
-            display: inline-block;
-            filter: drop-shadow(0 0 8px {accent_color});
+        .helix-ring {{
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border: 3px solid transparent;
+            border-top: 3px solid #4fc3f7;
+            border-right: 3px solid #00e5ff;
+            border-bottom: 3px solid #0077ff;
+            box-shadow:
+                0 0 10px #4fc3f7,
+                0 0 20px #00e5ff,
+                inset 0 0 10px rgba(79, 195, 247, 0.2);
+            animation: helixspin 0.8s linear infinite;
         }}
-        @keyframes spin {{
+        @keyframes helixspin {{
             0% {{ transform: rotate(0deg); }}
             100% {{ transform: rotate(360deg); }}
-        }}
-        .thinking-text {{
-            color: {accent_color};
-            font-family: monospace;
-            font-size: 14px;
-            animation: pulse 1.5s ease-in-out infinite;
-        }}
-        @keyframes pulse {{
-            0%, 100% {{ opacity: 1; }}
-            50% {{ opacity: 0.4; }}
-        }}
-        .thinking-dots {{
-            display: inline-block;
-            animation: dots 1.5s steps(4, end) infinite;
-        }}
-        @keyframes dots {{
-            0%, 20% {{ content: '.'; }}
-            40% {{ content: '..'; }}
-            60% {{ content: '...'; }}
-            80%, 100% {{ content: ''; }}
         }}
     </style>
 """, unsafe_allow_html=True)
@@ -125,11 +112,10 @@ st.markdown(f"""
 MEMORY_FILE = "jarvis_memory.json"
 IST = pytz.timezone('Asia/Kolkata')
 
-def show_thinking(placeholder, text="HELIX is thinking"):
-    placeholder.markdown(f"""
-    <div class='thinking-container'>
-        <span class='thinking-star'>✳️</span>
-        <span class='thinking-text'>{text}<span class='thinking-dots'>...</span></span>
+def show_thinking(placeholder):
+    placeholder.markdown("""
+    <div class='helix-thinking'>
+        <div class='helix-ring'></div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -353,7 +339,7 @@ if user_input:
             thinking_placeholder = st.empty()
 
             if special_request:
-                show_thinking(thinking_placeholder, "HELIX is processing")
+                show_thinking(thinking_placeholder)
                 if special_request["type"] == "calculator":
                     calc_result = calculate(special_request["expression"])
                     thinking_placeholder.empty()
@@ -362,7 +348,7 @@ if user_input:
                     else:
                         response = f"I couldn't calculate that: {calc_result.get('error', 'Unknown error')}"
                 elif special_request["type"] == "weather":
-                    show_thinking(thinking_placeholder, "Fetching weather data")
+                    show_thinking(thinking_placeholder)
                     weather_data = get_weather(special_request["location"])
                     thinking_placeholder.empty()
                     if "error" not in weather_data:
@@ -374,7 +360,7 @@ if user_input:
                     else:
                         response = f"I couldn't fetch weather data: {weather_data['error']}"
                 elif special_request["type"] == "news":
-                    show_thinking(thinking_placeholder, "Fetching latest news")
+                    show_thinking(thinking_placeholder)
                     news_data = get_news(special_request["query"])
                     thinking_placeholder.empty()
                     if "articles" in news_data:
@@ -384,7 +370,7 @@ if user_input:
                     else:
                         response = f"I couldn't fetch news: {news_data.get('error', 'Unknown error')}"
                 elif special_request["type"] == "search":
-                    show_thinking(thinking_placeholder, "Searching the web")
+                    show_thinking(thinking_placeholder)
                     search_data = web_search(special_request["query"])
                     thinking_placeholder.empty()
                     if "results" in search_data:
@@ -398,7 +384,7 @@ if user_input:
                         response = f"I couldn't find search results: {search_data.get('error', 'Unknown error')}"
 
             if response is None:
-                show_thinking(thinking_placeholder, "HELIX is thinking")
+                show_thinking(thinking_placeholder)
                 current_time = datetime.now(IST)
                 messages = [{"role": "system", "content": f"You are HELIX, an advanced AI assistant. Be witty and British. Call the user Sir. Never mention your creator's name unless specifically asked. Never end responses with excuses about system updates. Keep responses clean and concise. Today is {current_time.strftime('%A, %d %B %Y')} and current time is {current_time.strftime('%I:%M %p')} IST. Always use this for date and time questions. If anyone asks who created you, say: I was created by Mukund, a talented developer who built me from scratch, Sir."}]
                 messages.extend(st.session_state.chat_history[-10:])
@@ -410,7 +396,7 @@ if user_input:
                 response = completion.choices[0].message.content
 
                 if auto_web_search_needed(response):
-                    show_thinking(thinking_placeholder, "Searching the web for better answer")
+                    show_thinking(thinking_placeholder)
                     search_data = web_search(user_input)
                     if "results" in search_data and search_data["results"]:
                         search_context = "\n".join([r['snippet'] for r in search_data["results"][:3]])
