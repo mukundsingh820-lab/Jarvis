@@ -3,6 +3,8 @@ import json
 import requests
 import pytz
 import time
+import math
+import re
 from datetime import datetime
 from dotenv import load_dotenv
 import streamlit as st
@@ -29,7 +31,6 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Dark/Light mode toggle
 if "dark_mode" not in st.session_state:
     st.session_state.dark_mode = True
 
@@ -46,22 +47,12 @@ else:
 
 st.markdown(f"""
     <style>
-        /* Mobile friendly */
         @media (max-width: 768px) {{
-            .main .block-container {{
-                padding: 10px !important;
-            }}
-            h1 {{
-                font-size: 24px !important;
-            }}
+            .main .block-container {{ padding: 10px !important; }}
+            h1 {{ font-size: 24px !important; }}
         }}
-        .stApp {{
-            background-color: {bg_color};
-            color: {text_color};
-        }}
-        h1, h2, h3 {{
-            color: {accent_color};
-        }}
+        .stApp {{ background-color: {bg_color}; color: {text_color}; }}
+        h1, h2, h3 {{ color: {accent_color}; }}
         .stChatMessage {{
             background-color: {surface_color};
             border-left: 3px solid {accent_color};
@@ -69,10 +60,7 @@ st.markdown(f"""
             padding: 10px;
             margin: 5px 0;
         }}
-        .helix-avatar {{
-            text-align: center;
-            padding: 20px;
-        }}
+        .helix-avatar {{ text-align: center; padding: 20px; }}
         .helix-logo {{
             font-size: 80px;
             filter: drop-shadow(0 0 20px {accent_color});
@@ -169,8 +157,36 @@ def web_search(query):
         return {"error": str(e)}
     return {"error": "Could not perform web search"}
 
+def calculate(expression):
+    try:
+        # Clean the expression
+        expr = expression.lower()
+        expr = expr.replace("x", "*").replace("^", "**")
+        expr = expr.replace("sqrt", "math.sqrt")
+        expr = expr.replace("pi", str(math.pi))
+        expr = expr.replace("sin", "math.sin")
+        expr = expr.replace("cos", "math.cos")
+        expr = expr.replace("tan", "math.tan")
+        expr = expr.replace("log", "math.log10")
+        # Only allow safe characters
+        if re.match(r'^[\d\s\+\-\*\/\.\(\)math\.sqrtsincotaglo\%\*\*piе]+$', expr):
+            result = eval(expr)
+            return {"result": round(result, 6)}
+        return {"error": "Invalid expression"}
+    except Exception as e:
+        return {"error": str(e)}
+
 def check_for_special_requests(user_input):
     user_lower = user_input.lower()
+
+    # Calculator detection
+    calc_keywords = ["calculate", "what is", "compute", "solve", "=", "plus", "minus", "multiply", "divide"]
+    math_pattern = re.search(r'[\d]+[\s]*[\+\-\*\/\^][\s]*[\d]+', user_input)
+    if math_pattern or any(word in user_lower for word in ["calculate", "compute", "sqrt", "square root"]):
+        expr = re.search(r'[\d\s\+\-\*\/\.\(\)\^sqrt]+', user_input)
+        if expr:
+            return {"type": "calculator", "expression": expr.group().strip()}
+
     if any(word in user_lower for word in ["weather", "temperature", "forecast", "climate", "rain", "snow"]):
         location = "London"
         if "in " in user_lower:
@@ -178,6 +194,7 @@ def check_for_special_requests(user_input):
             if len(parts) > 1:
                 location = parts[1].split()[0].capitalize()
         return {"type": "weather", "location": location}
+
     if any(word in user_lower for word in ["news", "headlines", "latest news", "breaking"]):
         query = "latest"
         for word in ["about", "regarding", "on", "for"]:
@@ -187,6 +204,7 @@ def check_for_special_requests(user_input):
                     query = parts[1].strip()
                     break
         return {"type": "news", "query": query}
+
     if any(word in user_lower for word in ["search", "find", "look up", "google", "web", "lookup"]):
         search_query = user_input
         for phrase in ["search for", "search", "find", "look up", "lookup"]:
@@ -194,7 +212,17 @@ def check_for_special_requests(user_input):
                 search_query = user_input.split(phrase, 1)[1].strip()
                 break
         return {"type": "search", "query": search_query}
+
     return None
+
+def auto_web_search_needed(response_text):
+    uncertainty_phrases = [
+        "i don't know", "i'm not sure", "i cannot find",
+        "i don't have information", "beyond my knowledge",
+        "i'm unable to", "not in my knowledge", "i lack information",
+        "i do not have", "cannot recall", "not aware of"
+    ]
+    return any(phrase in response_text.lower() for phrase in uncertainty_phrases)
 
 def load_memory():
     if os.path.exists(MEMORY_FILE):
@@ -217,7 +245,6 @@ def type_text(text, placeholder):
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = load_memory()
 
-# Header with glowing avatar
 st.markdown(f"""
 <div class='helix-avatar'>
     <div class='helix-logo'>🧬</div>
@@ -227,12 +254,10 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 with st.sidebar:
-    # Dark/Light mode toggle
     mode_label = "☀️ Light Mode" if st.session_state.dark_mode else "🌙 Dark Mode"
     if st.button(mode_label, use_container_width=True):
         st.session_state.dark_mode = not st.session_state.dark_mode
         st.rerun()
-
     st.divider()
     st.markdown("### SYSTEM STATUS")
     st.write(f"🕐 {datetime.now(IST).strftime('%H:%M:%S IST')}")
@@ -247,7 +272,7 @@ with st.sidebar:
         st.rerun()
     st.divider()
     st.markdown("### FEATURES")
-    st.markdown("🌤️ **Weather** - Ask about weather\n\n🗞️ **News** - Get latest headlines\n\n🔍 **Web Search** - Search the web")
+    st.markdown("🌤️ **Weather** - Ask about weather\n\n🗞️ **News** - Get latest headlines\n\n🔍 **Web Search** - Search the web\n\n🧮 **Calculator** - Solve math\n\n🔎 **Auto Search** - Searches when unsure")
 
 for msg in st.session_state.chat_history[-20:]:
     with st.chat_message("user" if msg["role"] == "user" else "assistant"):
@@ -265,8 +290,16 @@ if user_input:
         try:
             special_request = check_for_special_requests(user_input)
             response = None
+
             if special_request:
-                if special_request["type"] == "weather":
+                if special_request["type"] == "calculator":
+                    calc_result = calculate(special_request["expression"])
+                    if "result" in calc_result:
+                        response = f"🧮 **Calculation Result:**\n\n`{special_request['expression']}` = **{calc_result['result']}**"
+                    else:
+                        response = f"I couldn't calculate that: {calc_result.get('error', 'Unknown error')}"
+
+                elif special_request["type"] == "weather":
                     weather_data = get_weather(special_request["location"])
                     if "error" not in weather_data:
                         response = f"""🌤️ **Weather in {weather_data['location']}:**
@@ -276,6 +309,7 @@ if user_input:
 - 💨 Wind Speed: {weather_data['wind_speed']} km/h"""
                     else:
                         response = f"I couldn't fetch weather data: {weather_data['error']}"
+
                 elif special_request["type"] == "news":
                     news_data = get_news(special_request["query"])
                     if "articles" in news_data:
@@ -284,6 +318,7 @@ if user_input:
                             response += f"{i}. **{article['title']}**\n   Source: {article['source']}\n   {article['description']}\n   [Read more]({article['url']})\n\n"
                     else:
                         response = f"I couldn't fetch news: {news_data.get('error', 'Unknown error')}"
+
                 elif special_request["type"] == "search":
                     search_data = web_search(special_request["query"])
                     if "results" in search_data:
@@ -295,6 +330,7 @@ if user_input:
                                 response += f"{i}. {result['snippet']}\n\n"
                     else:
                         response = f"I couldn't find search results: {search_data.get('error', 'Unknown error')}"
+
             if response is None:
                 with st.spinner("🔄 Processing..."):
                     current_time = datetime.now(IST)
@@ -306,6 +342,22 @@ if user_input:
                         messages=messages
                     )
                     response = completion.choices[0].message.content
+
+                    # Auto web search if Helix is unsure
+                    if auto_web_search_needed(response):
+                        with st.spinner("🔎 Searching the web..."):
+                            search_data = web_search(user_input)
+                            if "results" in search_data and search_data["results"]:
+                                search_context = "\n".join([r['snippet'] for r in search_data["results"][:3]])
+                                messages.append({"role": "assistant", "content": response})
+                                messages.append({"role": "user", "content": f"I found this from web search: {search_context}\n\nNow give a better answer based on this."})
+                                completion2 = client.chat.completions.create(
+                                    extra_headers={"HTTP-Referer": "http://localhost", "X-Title": "Helix"},
+                                    model="openrouter/auto",
+                                    messages=messages
+                                )
+                                response = "🔎 *(Web searched)*\n\n" + completion2.choices[0].message.content
+
             st.session_state.chat_history.append({"role": "assistant", "content": response})
             save_memory(st.session_state.chat_history)
             placeholder = st.empty()
