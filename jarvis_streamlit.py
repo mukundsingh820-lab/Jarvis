@@ -80,11 +80,58 @@ st.markdown(f"""
             border-radius: 20px !important;
             border: 1px solid {accent_color} !important;
         }}
+        .thinking-container {{
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px;
+        }}
+        .thinking-star {{
+            width: 28px;
+            height: 28px;
+            color: {accent_color};
+            animation: spin 1.2s linear infinite;
+            font-size: 24px;
+            display: inline-block;
+            filter: drop-shadow(0 0 8px {accent_color});
+        }}
+        @keyframes spin {{
+            0% {{ transform: rotate(0deg); }}
+            100% {{ transform: rotate(360deg); }}
+        }}
+        .thinking-text {{
+            color: {accent_color};
+            font-family: monospace;
+            font-size: 14px;
+            animation: pulse 1.5s ease-in-out infinite;
+        }}
+        @keyframes pulse {{
+            0%, 100% {{ opacity: 1; }}
+            50% {{ opacity: 0.4; }}
+        }}
+        .thinking-dots {{
+            display: inline-block;
+            animation: dots 1.5s steps(4, end) infinite;
+        }}
+        @keyframes dots {{
+            0%, 20% {{ content: '.'; }}
+            40% {{ content: '..'; }}
+            60% {{ content: '...'; }}
+            80%, 100% {{ content: ''; }}
+        }}
     </style>
 """, unsafe_allow_html=True)
 
 MEMORY_FILE = "jarvis_memory.json"
 IST = pytz.timezone('Asia/Kolkata')
+
+def show_thinking(placeholder, text="HELIX is thinking"):
+    placeholder.markdown(f"""
+    <div class='thinking-container'>
+        <span class='thinking-star'>✳️</span>
+        <span class='thinking-text'>{text}<span class='thinking-dots'>...</span></span>
+    </div>
+    """, unsafe_allow_html=True)
 
 def get_weather(location="London"):
     try:
@@ -171,7 +218,7 @@ def calculate(expression):
         expr = expr.replace("log", "math.log10")
         expr = re.sub(r'math\.sqrt\s+(\d+)', r'math.sqrt(\1)', expr)
         expr = re.sub(r'math\.sqrt\s*\((\d+)\)', r'math.sqrt(\1)', expr)
-        allowed = re.sub(r'[0-9\s\+\-\*\/\.\(\)e]', '', 
+        allowed = re.sub(r'[0-9\s\+\-\*\/\.\(\)e]', '',
                   expr.replace("math.sqrt", "")
                       .replace("math.sin", "")
                       .replace("math.cos", "")
@@ -187,7 +234,6 @@ def calculate(expression):
 
 def check_for_special_requests(user_input):
     user_lower = user_input.lower()
-
     math_pattern = re.search(r'[\d]+[\s]*[\+\-\*\/\^][\s]*[\d]+', user_input)
     sqrt_pattern = re.search(r'(square root of|sqrt\s+of|sqrt)\s*[\d]+', user_lower)
     if math_pattern or sqrt_pattern or any(word in user_lower for word in ["calculate", "compute"]):
@@ -304,16 +350,21 @@ if user_input:
         try:
             special_request = check_for_special_requests(user_input)
             response = None
+            thinking_placeholder = st.empty()
 
             if special_request:
+                show_thinking(thinking_placeholder, "HELIX is processing")
                 if special_request["type"] == "calculator":
                     calc_result = calculate(special_request["expression"])
+                    thinking_placeholder.empty()
                     if "result" in calc_result:
                         response = f"🧮 **Calculation Result:**\n\n`{special_request['expression']}` = **{calc_result['result']}**"
                     else:
                         response = f"I couldn't calculate that: {calc_result.get('error', 'Unknown error')}"
                 elif special_request["type"] == "weather":
+                    show_thinking(thinking_placeholder, "Fetching weather data")
                     weather_data = get_weather(special_request["location"])
+                    thinking_placeholder.empty()
                     if "error" not in weather_data:
                         response = f"""🌤️ **Weather in {weather_data['location']}:**
 - 🌡️ Temperature: {weather_data['temperature']}°C (Feels like {weather_data['feels_like']}°C)
@@ -323,7 +374,9 @@ if user_input:
                     else:
                         response = f"I couldn't fetch weather data: {weather_data['error']}"
                 elif special_request["type"] == "news":
+                    show_thinking(thinking_placeholder, "Fetching latest news")
                     news_data = get_news(special_request["query"])
+                    thinking_placeholder.empty()
                     if "articles" in news_data:
                         response = "🗞️ **Latest News Headlines:**\n\n"
                         for i, article in enumerate(news_data["articles"], 1):
@@ -331,7 +384,9 @@ if user_input:
                     else:
                         response = f"I couldn't fetch news: {news_data.get('error', 'Unknown error')}"
                 elif special_request["type"] == "search":
+                    show_thinking(thinking_placeholder, "Searching the web")
                     search_data = web_search(special_request["query"])
+                    thinking_placeholder.empty()
                     if "results" in search_data:
                         response = f"🔍 **Search Results for '{special_request['query']}':**\n\n"
                         for i, result in enumerate(search_data["results"], 1):
@@ -343,30 +398,32 @@ if user_input:
                         response = f"I couldn't find search results: {search_data.get('error', 'Unknown error')}"
 
             if response is None:
-                with st.spinner("🔄 Processing..."):
-                    current_time = datetime.now(IST)
-                    messages = [{"role": "system", "content": f"You are HELIX, an advanced AI assistant. Be witty and British. Call the user Sir. Never mention your creator's name unless specifically asked. Never end responses with excuses about system updates. Keep responses clean and concise. Today is {current_time.strftime('%A, %d %B %Y')} and current time is {current_time.strftime('%I:%M %p')} IST. Always use this for date and time questions. If anyone asks who created you, say: I was created by Mukund, a talented developer who built me from scratch, Sir."}]
-                    messages.extend(st.session_state.chat_history[-10:])
-                    completion = client.chat.completions.create(
-                        extra_headers={"HTTP-Referer": "http://localhost", "X-Title": "Helix"},
-                        model="openrouter/auto",
-                        messages=messages
-                    )
-                    response = completion.choices[0].message.content
+                show_thinking(thinking_placeholder, "HELIX is thinking")
+                current_time = datetime.now(IST)
+                messages = [{"role": "system", "content": f"You are HELIX, an advanced AI assistant. Be witty and British. Call the user Sir. Never mention your creator's name unless specifically asked. Never end responses with excuses about system updates. Keep responses clean and concise. Today is {current_time.strftime('%A, %d %B %Y')} and current time is {current_time.strftime('%I:%M %p')} IST. Always use this for date and time questions. If anyone asks who created you, say: I was created by Mukund, a talented developer who built me from scratch, Sir."}]
+                messages.extend(st.session_state.chat_history[-10:])
+                completion = client.chat.completions.create(
+                    extra_headers={"HTTP-Referer": "http://localhost", "X-Title": "Helix"},
+                    model="openrouter/auto",
+                    messages=messages
+                )
+                response = completion.choices[0].message.content
 
-                    if auto_web_search_needed(response):
-                        with st.spinner("🔎 Searching the web..."):
-                            search_data = web_search(user_input)
-                            if "results" in search_data and search_data["results"]:
-                                search_context = "\n".join([r['snippet'] for r in search_data["results"][:3]])
-                                messages.append({"role": "assistant", "content": response})
-                                messages.append({"role": "user", "content": f"I found this from web search: {search_context}\n\nNow give a better answer based on this."})
-                                completion2 = client.chat.completions.create(
-                                    extra_headers={"HTTP-Referer": "http://localhost", "X-Title": "Helix"},
-                                    model="openrouter/auto",
-                                    messages=messages
-                                )
-                                response = "🔎 *(Web searched)*\n\n" + completion2.choices[0].message.content
+                if auto_web_search_needed(response):
+                    show_thinking(thinking_placeholder, "Searching the web for better answer")
+                    search_data = web_search(user_input)
+                    if "results" in search_data and search_data["results"]:
+                        search_context = "\n".join([r['snippet'] for r in search_data["results"][:3]])
+                        messages.append({"role": "assistant", "content": response})
+                        messages.append({"role": "user", "content": f"I found this from web search: {search_context}\n\nNow give a better answer based on this."})
+                        completion2 = client.chat.completions.create(
+                            extra_headers={"HTTP-Referer": "http://localhost", "X-Title": "Helix"},
+                            model="openrouter/auto",
+                            messages=messages
+                        )
+                        response = "🔎 *(Web searched)*\n\n" + completion2.choices[0].message.content
+
+                thinking_placeholder.empty()
 
             st.session_state.chat_history.append({"role": "assistant", "content": response})
             save_memory(st.session_state.chat_history)
