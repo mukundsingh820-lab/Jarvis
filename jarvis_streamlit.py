@@ -1,647 +1,420 @@
-"""
-HELIX - Upgraded AI Assistant
-Changes from original:
-  ðŸš¨  eval() removed  â†’ safe AST-based calculator via simpleeval
-  ðŸ§   Better memory   â†’ sliding window + automatic summarisation of older turns
-  âš¡  Streaming       â†’ real OpenRouter stream piped into st.write_stream
-  ðŸŒ  Better search   â†’ Brave Search API (falls back to DuckDuckGo HTML scrape)
-  ðŸ¤–  AI routing      â†’ LLM intent classifier replaces brittle regex
-"""
-
 import os
 import json
-import re
-import math
-import time
 import requests
 import pytz
-import psutil
+import time
+import math
+import re
 from datetime import datetime
 from dotenv import load_dotenv
-
 import streamlit as st
 from openai import OpenAI
-
-# â”€â”€ optional: pip install simpleeval â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-try:
-    from simpleeval import simple_eval, EvalWithCompoundTypes
-    SIMPLEEVAL_AVAILABLE = True
-except ImportError:
-    SIMPLEEVAL_AVAILABLE = False
+import psutil
 
 load_dotenv()
-
-# â”€â”€ API keys â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-api_key        = os.getenv("OPENROUTER_API_KEY")
-news_api_key   = os.getenv("NEWS_API_KEY", "")
-brave_api_key  = os.getenv("BRAVE_SEARCH_API_KEY", "")   # NEW
+api_key = os.getenv("OPENROUTER_API_KEY")
+news_api_key = os.getenv("NEWS_API_KEY", "")
 
 if not api_key:
-    st.error("âŒ OPENROUTER_API_KEY not found!")
+    st.error("❌ OPENROUTER_API_KEY not found!")
     st.stop()
 
-client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=api_key)
+client = OpenAI(
+    base_url="https://openrouter.ai/api/v1",
+    api_key=api_key,
+)
 
-# â”€â”€ page config â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 st.set_page_config(
     page_title="HELIX - AI Assistant",
-    page_icon="ðŸ§¬",
+    page_icon="🧬",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# â”€â”€ theme â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 if "dark_mode" not in st.session_state:
     st.session_state.dark_mode = True
 
 if st.session_state.dark_mode:
-    bg_color, text_color, surface_color, accent_color = "#0a0e27", "#ffffff", "#1a1f3a", "#4fc3f7"
+    bg_color = "#0a0e27"
+    text_color = "#ffffff"
+    surface_color = "#1a1f3a"
+    accent_color = "#4fc3f7"
 else:
-    bg_color, text_color, surface_color, accent_color = "#f0f4f8", "#1a1a2e", "#ffffff", "#0077b6"
+    bg_color = "#f0f4f8"
+    text_color = "#1a1a2e"
+    surface_color = "#ffffff"
+    accent_color = "#0077b6"
 
 st.markdown(f"""
-<style>
-    @media (max-width: 768px) {{
-        .main .block-container {{ padding: 10px !important; }}
-        h1 {{ font-size: 24px !important; }}
-    }}
-    .stApp {{ background-color: {bg_color}; color: {text_color}; }}
-    h1, h2, h3 {{ color: {accent_color}; }}
-    .stChatMessage {{
-        background-color: {surface_color};
-        border-left: 3px solid {accent_color};
-        border-radius: 10px;
-        padding: 10px;
-        margin: 5px 0;
-    }}
-    .helix-avatar {{ text-align: center; padding: 20px; }}
-    .helix-logo {{
-        font-size: 80px;
-        filter: drop-shadow(0 0 20px {accent_color});
-        animation: glow 2s ease-in-out infinite alternate;
-    }}
-    @keyframes glow {{
-        from {{ filter: drop-shadow(0 0 10px {accent_color}); }}
-        to   {{ filter: drop-shadow(0 0 30px {accent_color}); }}
-    }}
-    .stChatInput input {{
-        background-color: {surface_color} !important;
-        color: {text_color} !important;
-        border: 2px solid {accent_color} !important;
-        border-radius: 20px !important;
-    }}
-    .stButton button {{
-        border-radius: 20px !important;
-        border: 1px solid {accent_color} !important;
-    }}
-</style>
+    <style>
+        @media (max-width: 768px) {{
+            .main .block-container {{ padding: 10px !important; }}
+            h1 {{ font-size: 24px !important; }}
+        }}
+        .stApp {{ background-color: {bg_color}; color: {text_color}; }}
+        h1, h2, h3 {{ color: {accent_color}; }}
+        .stChatMessage {{
+            background-color: {surface_color};
+            border-left: 3px solid {accent_color};
+            border-radius: 10px;
+            padding: 10px;
+            margin: 5px 0;
+        }}
+        .helix-avatar {{ text-align: center; padding: 20px; }}
+        .helix-logo {{
+            font-size: 80px;
+            filter: drop-shadow(0 0 20px {accent_color});
+            animation: glow 2s ease-in-out infinite alternate;
+        }}
+        @keyframes glow {{
+            from {{ filter: drop-shadow(0 0 10px {accent_color}); }}
+            to {{ filter: drop-shadow(0 0 30px {accent_color}); }}
+        }}
+        .stChatInput input {{
+            background-color: {surface_color} !important;
+            color: {text_color} !important;
+            border: 2px solid {accent_color} !important;
+            border-radius: 20px !important;
+        }}
+        .stButton button {{
+            border-radius: 20px !important;
+            border: 1px solid {accent_color} !important;
+        }}
+
+        /* Spinning Ring Animation */
+        .helix-thinking {{
+            display: flex;
+            justify-content: left;
+            align-items: center;
+            padding: 10px;
+        }}
+        .helix-ring {{
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border: 3px solid transparent;
+            border-top: 3px solid #4fc3f7;
+            border-right: 3px solid #00e5ff;
+            border-bottom: 3px solid #0077ff;
+            box-shadow:
+                0 0 10px #4fc3f7,
+                0 0 20px #00e5ff,
+                inset 0 0 10px rgba(79, 195, 247, 0.2);
+            animation: helixspin 0.8s linear infinite;
+        }}
+        @keyframes helixspin {{
+            0% {{ transform: rotate(0deg); }}
+            100% {{ transform: rotate(360deg); }}
+        }}
+    </style>
 """, unsafe_allow_html=True)
 
-# â”€â”€ constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-MEMORY_FILE       = "jarvis_memory.json"
-IST               = pytz.timezone('Asia/Kolkata')
-WINDOW_SIZE       = 10   # recent turns kept verbatim
-SUMMARY_THRESHOLD = 30   # summarise when history exceeds this many messages
+MEMORY_FILE = "jarvis_memory.json"
+IST = pytz.timezone('Asia/Kolkata')
 
-SYSTEM_PROMPT = (
-    "You are HELIX, an advanced AI assistant. Be witty and British. "
-    "Call the user Sir. Never mention your creator's name unless specifically asked. "
-    "Never end responses with excuses about system updates. "
-    "Keep responses clean and concise. "
-    "Today is {date} and current time is {time} IST. "
-    "Always use this for date and time questions. "
-    "If anyone asks who created you, say: I was created by Mukund, "
-    "a talented developer who built me from scratch, Sir."
-)
+def show_thinking(placeholder):
+    placeholder.markdown("""
+    <div class='helix-thinking'>
+        <div class='helix-ring'></div>
+    </div>
+    """, unsafe_allow_html=True)
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-# ðŸ§   MEMORY  â€” sliding window + summarisation
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-def load_memory() -> dict:
-    """Return {"summary": str|None, "history": [...]}"""
-    if os.path.exists(MEMORY_FILE):
-        with open(MEMORY_FILE) as f:
-            data = json.load(f)
-        # Backwards-compat: old format was a plain list
-        if isinstance(data, list):
-            return {"summary": None, "history": data}
-        return data
-    return {"summary": None, "history": []}
-
-
-def save_memory(memory: dict):
-    with open(MEMORY_FILE, "w") as f:
-        json.dump(memory, f, indent=2)
-
-
-def maybe_summarise(memory: dict) -> dict:
-    """
-    If history is long, ask the LLM to compress old turns into a summary,
-    keeping the most recent WINDOW_SIZE messages verbatim.
-    """
-    history = memory["history"]
-    if len(history) <= SUMMARY_THRESHOLD:
-        return memory
-
-    old_turns  = history[:-WINDOW_SIZE]
-    keep_turns = history[-WINDOW_SIZE:]
-
-    old_text = "\n".join(
-        f"{m['role'].upper()}: {m['content']}" for m in old_turns
-    )
-    prompt = (
-        "Summarise the following conversation in 3-5 concise bullet points "
-        "capturing key facts, user preferences, and outcomes:\n\n" + old_text
-    )
+def get_weather(location="London"):
     try:
-        resp = client.chat.completions.create(
-            model="openrouter/auto",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=300,
-        )
-        new_summary = resp.choices[0].message.content.strip()
-        # Prepend any existing summary
-        if memory.get("summary"):
-            new_summary = memory["summary"] + "\n" + new_summary
-    except Exception:
-        new_summary = memory.get("summary")
-
-    return {"summary": new_summary, "history": keep_turns}
-
-
-def build_messages_for_llm(memory: dict, user_input: str) -> list:
-    """
-    Construct the message list sent to the LLM:
-      system â†’ (optional summary block) â†’ recent history â†’ new user turn
-    """
-    now = datetime.now(IST)
-    system = SYSTEM_PROMPT.format(
-        date=now.strftime("%A, %d %B %Y"),
-        time=now.strftime("%I:%M %p"),
-    )
-    messages = [{"role": "system", "content": system}]
-
-    if memory.get("summary"):
-        messages.append({
-            "role": "system",
-            "content": f"[Conversation summary so far]\n{memory['summary']}",
-        })
-
-    messages.extend(memory["history"][-WINDOW_SIZE:])
-    messages.append({"role": "user", "content": user_input})
-    return messages
-
-
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-# ðŸš¨  CALCULATOR  â€” no eval()
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-_SAFE_NAMES = {
-    "sqrt": math.sqrt, "sin": math.sin, "cos": math.cos,
-    "tan": math.tan,   "log": math.log10, "pi": math.pi,
-    "e": math.e,       "abs": abs,        "round": round,
-}
-
-def calculate(expression: str) -> dict:
-    """
-    Evaluate a maths expression safely â€” no eval() on arbitrary strings.
-    Uses simpleeval when available, otherwise a restricted AST evaluator.
-    """
-    expr = expression.lower().strip()
-    # Normalise common aliases
-    expr = (expr
-            .replace("^", "**")
-            .replace("Ã—", "*").replace("x", "*")
-            .replace("Ã·", "/")
-            .replace("square root of", "sqrt")
-            .replace("sqrt of", "sqrt"))
-
-    if SIMPLEEVAL_AVAILABLE:
-        try:
-            result = simple_eval(expr, names=_SAFE_NAMES, functions=_SAFE_NAMES)
-            return {"result": round(float(result), 6)}
-        except Exception as exc:
-            return {"error": str(exc)}
-
-    # Fallback: manual AST walk (no eval, no exec)
-    import ast
-    _OPS = {
-        ast.Add: lambda a, b: a + b,
-        ast.Sub: lambda a, b: a - b,
-        ast.Mult: lambda a, b: a * b,
-        ast.Div: lambda a, b: a / b,
-        ast.Pow: lambda a, b: a ** b,
-        ast.USub: lambda a: -a,
-    }
-
-    def _eval_node(node):
-        if isinstance(node, ast.Constant):
-            return node.value
-        if isinstance(node, ast.Name) and node.id in _SAFE_NAMES:
-            return _SAFE_NAMES[node.id]
-        if isinstance(node, ast.BinOp) and type(node.op) in _OPS:
-            return _OPS[type(node.op)](_eval_node(node.left), _eval_node(node.right))
-        if isinstance(node, ast.UnaryOp) and type(node.op) in _OPS:
-            return _OPS[type(node.op)](_eval_node(node.operand))
-        if isinstance(node, ast.Call):
-            func = _eval_node(node.func)
-            if callable(func):
-                args = [_eval_node(a) for a in node.args]
-                return func(*args)
-        raise ValueError(f"Unsupported expression: {ast.dump(node)}")
-
-    try:
-        tree = ast.parse(expr, mode="eval")
-        result = _eval_node(tree.body)
-        return {"result": round(float(result), 6)}
-    except Exception as exc:
-        return {"error": str(exc)}
-
-
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-# ðŸŒ  SEARCH  â€” Brave Search API with DuckDuckGo HTML fallback
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-def web_search(query: str) -> dict:
-    # â”€â”€ Brave Search (preferred) â”€â”€
-    if brave_api_key:
-        try:
-            resp = requests.get(
-                "https://api.search.brave.com/res/v1/web/search",
-                headers={
-                    "Accept": "application/json",
-                    "Accept-Encoding": "gzip",
-                    "X-Subscription-Token": brave_api_key,
-                },
-                params={"q": query, "count": 5},
-                timeout=6,
-            )
-            if resp.status_code == 200:
-                items = resp.json().get("web", {}).get("results", [])
-                results = [
-                    {
-                        "title":   r.get("title", ""),
-                        "url":     r.get("url", ""),
-                        "snippet": r.get("description", ""),
-                    }
-                    for r in items[:5]
-                ]
-                if results:
-                    return {"results": results}
-        except Exception as exc:
-            pass  # fall through to DuckDuckGo
-
-    # â”€â”€ DuckDuckGo HTML scrape fallback (more reliable than instant-answer API) â”€â”€
-    try:
-        headers = {"User-Agent": "Mozilla/5.0 (compatible; HELIX/2.0)"}
-        resp = requests.get(
-            "https://html.duckduckgo.com/html/",
-            params={"q": query},
-            headers=headers,
-            timeout=6,
-        )
-        if resp.status_code == 200:
-            from html.parser import HTMLParser
-
-            class DDGParser(HTMLParser):
-                def __init__(self):
-                    super().__init__()
-                    self.results, self._cur = [], {}
-                    self._in_title = self._in_snippet = False
-
-                def handle_starttag(self, tag, attrs):
-                    attrs = dict(attrs)
-                    cls = attrs.get("class", "")
-                    if tag == "a" and "result__a" in cls:
-                        self._cur["url"] = attrs.get("href", "")
-                        self._in_title = True
-                    if tag == "a" and "result__snippet" in cls:
-                        self._in_snippet = True
-
-                def handle_data(self, data):
-                    if self._in_title:
-                        self._cur["title"] = data.strip()
-                    if self._in_snippet:
-                        self._cur["snippet"] = data.strip()
-
-                def handle_endtag(self, tag):
-                    if self._in_title and tag == "a":
-                        self._in_title = False
-                    if self._in_snippet and tag == "a":
-                        self._in_snippet = False
-                        if self._cur.get("title"):
-                            self.results.append(dict(self._cur))
-                            self._cur = {}
-
-            parser = DDGParser()
-            parser.feed(resp.text)
-            if parser.results:
-                return {"results": parser.results[:5]}
-    except Exception as exc:
-        return {"error": str(exc)}
-
-    return {"error": "No search results found"}
-
-
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-# weather / news  (unchanged logic, kept clean)
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-def get_weather(location="London") -> dict:
-    try:
-        resp = requests.get(f"https://wttr.in/{location}?format=j1", timeout=5)
-        if resp.status_code == 200:
-            cur = resp.json()["current_condition"][0]
+        response = requests.get(f"https://wttr.in/{location}?format=j1", timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            current = data['current_condition'][0]
             return {
-                "location":    location,
-                "temperature": cur["temp_C"],
-                "description": cur["weatherDesc"][0]["value"],
-                "humidity":    cur["humidity"],
-                "wind_speed":  cur["windspeedKmph"],
-                "feels_like":  cur["FeelsLikeC"],
+                "location": location,
+                "temperature": current['temp_C'],
+                "description": current['weatherDesc'][0]['value'],
+                "humidity": current['humidity'],
+                "wind_speed": current['windspeedKmph'],
+                "feels_like": current['FeelsLikeC']
             }
-    except Exception as exc:
-        return {"error": str(exc)}
+    except Exception as e:
+        return {"error": str(e)}
     return {"error": "Could not fetch weather data"}
 
-
-def get_news(query="latest", country="us") -> dict:
-    if not news_api_key:
-        return {"error": "NEWS_API_KEY not configured"}
+def get_news(query="latest", country="us"):
     try:
+        if not news_api_key:
+            return {"error": "NEWS_API_KEY not configured"}
         if query == "latest":
             url = f"https://newsapi.org/v2/top-headlines?country={country}&apiKey={news_api_key}"
         else:
             url = f"https://newsapi.org/v2/everything?q={query}&sortBy=publishedAt&language=en&apiKey={news_api_key}"
-        resp = requests.get(url, timeout=5)
-        if resp.status_code == 200:
-            articles = resp.json().get("articles", [])[:5]
-            return {
-                "articles": [
-                    {
-                        "title":        a["title"],
-                        "source":       a["source"]["name"],
-                        "description":  a["description"],
-                        "url":          a["url"],
-                        "published_at": a["publishedAt"],
-                    }
-                    for a in articles
-                ]
-            }
-    except Exception as exc:
-        return {"error": str(exc)}
+        response = requests.get(url, timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            articles = data.get('articles', [])[:5]
+            news_list = []
+            for article in articles:
+                news_list.append({
+                    "title": article['title'],
+                    "source": article['source']['name'],
+                    "description": article['description'],
+                    "url": article['url'],
+                    "published_at": article['publishedAt']
+                })
+            return {"articles": news_list}
+    except Exception as e:
+        return {"error": str(e)}
     return {"error": "Could not fetch news"}
 
-
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-# ðŸ¤–  AI ROUTING  â€” replace brittle regex with an LLM intent classifier
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-_INTENT_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "intent": {
-            "type": "string",
-            "enum": ["calculator", "weather", "news", "search", "chat"],
-        },
-        "param": {
-            "type": "string",
-            "description": (
-                "For calculator: the maths expression. "
-                "For weather: the city name. "
-                "For news: the topic or 'latest'. "
-                "For search: the search query. "
-                "For chat: empty string."
-            ),
-        },
-    },
-    "required": ["intent", "param"],
-}
-
-def classify_intent(user_input: str) -> dict:
-    """
-    Ask a fast LLM to classify the user's intent and extract parameters.
-    Returns {"intent": ..., "param": ...} or {"intent": "chat", "param": ""} on error.
-    """
+def web_search(query):
     try:
-        resp = client.chat.completions.create(
-            model="openrouter/auto",
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "You are an intent classifier. "
-                        "Classify the user message into exactly one intent: "
-                        "calculator, weather, news, search, or chat. "
-                        "Return ONLY valid JSON matching the schema â€” no prose, no markdown."
-                    ),
-                },
-                {"role": "user", "content": user_input},
-            ],
-            response_format={"type": "json_object"},
-            max_tokens=80,
-        )
-        raw = resp.choices[0].message.content.strip()
-        parsed = json.loads(raw)
-        if parsed.get("intent") in ("calculator", "weather", "news", "search", "chat"):
-            return parsed
-    except Exception:
-        pass
-    return {"intent": "chat", "param": ""}
+        url = "https://api.duckduckgo.com/"
+        params = {"q": query, "format": "json", "pretty": 1, "no_redirect": 1}
+        response = requests.get(url, params=params, timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            results = []
+            if 'RelatedTopics' in data:
+                for topic in data['RelatedTopics'][:5]:
+                    if 'Text' in topic:
+                        results.append({
+                            "title": topic.get('Text', ''),
+                            "url": topic.get('FirstURL', ''),
+                            "snippet": topic.get('Text', '')
+                        })
+            if data.get('AbstractText'):
+                results.insert(0, {
+                    "title": data.get('Heading', 'Search Result'),
+                    "url": data.get('AbstractURL', ''),
+                    "snippet": data.get('AbstractText', '')
+                })
+            return {"results": results[:5]} if results else {"error": "No results found"}
+    except Exception as e:
+        return {"error": str(e)}
+    return {"error": "Could not perform web search"}
 
+def calculate(expression):
+    try:
+        expr = expression.lower().strip()
+        expr = expr.replace("x", "*").replace("^", "**")
+        expr = expr.replace("pi", str(math.pi))
+        expr = expr.replace("square root of", "math.sqrt")
+        expr = expr.replace("sqrt of", "math.sqrt")
+        expr = expr.replace("sqrt", "math.sqrt")
+        expr = expr.replace("sin", "math.sin")
+        expr = expr.replace("cos", "math.cos")
+        expr = expr.replace("tan", "math.tan")
+        expr = expr.replace("log", "math.log10")
+        expr = re.sub(r'math\.sqrt\s+(\d+)', r'math.sqrt(\1)', expr)
+        expr = re.sub(r'math\.sqrt\s*\((\d+)\)', r'math.sqrt(\1)', expr)
+        allowed = re.sub(r'[0-9\s\+\-\*\/\.\(\)e]', '',
+                  expr.replace("math.sqrt", "")
+                      .replace("math.sin", "")
+                      .replace("math.cos", "")
+                      .replace("math.tan", "")
+                      .replace("math.log10", "")
+                      .replace("math.pi", ""))
+        if allowed == "":
+            result = eval(expr, {"__builtins__": {}}, {"math": math})
+            return {"result": round(float(result), 6)}
+        return {"error": "Invalid expression"}
+    except Exception as e:
+        return {"error": str(e)}
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-# âš¡  STREAMING  â€” real server-sent-events stream
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+def check_for_special_requests(user_input):
+    user_lower = user_input.lower()
+    math_pattern = re.search(r'[\d]+[\s]*[\+\-\*\/\^][\s]*[\d]+', user_input)
+    sqrt_pattern = re.search(r'(square root of|sqrt\s+of|sqrt)\s*[\d]+', user_lower)
+    if math_pattern or sqrt_pattern or any(word in user_lower for word in ["calculate", "compute"]):
+        if sqrt_pattern:
+            num = re.search(r'[\d]+', sqrt_pattern.group())
+            if num:
+                return {"type": "calculator", "expression": f"math.sqrt({num.group()})"}
+        if math_pattern:
+            return {"type": "calculator", "expression": math_pattern.group().strip()}
+        expr = re.search(r'[\d\s\+\-\*\/\.\(\)\^]+', user_input)
+        if expr:
+            return {"type": "calculator", "expression": expr.group().strip()}
 
-def stream_llm_response(messages: list):
-    """
-    Generator that yields text chunks from the OpenRouter streaming endpoint.
-    Compatible with st.write_stream().
-    """
-    with client.chat.completions.create(
-        extra_headers={"HTTP-Referer": "http://localhost", "X-Title": "Helix"},
-        model="openrouter/auto",
-        messages=messages,
-        stream=True,
-    ) as stream:
-        for chunk in stream:
-            delta = chunk.choices[0].delta
-            if delta and delta.content:
-                yield delta.content
+    if any(word in user_lower for word in ["weather", "temperature", "forecast", "climate", "rain", "snow"]):
+        location = "London"
+        if "in " in user_lower:
+            parts = user_lower.split("in ")
+            if len(parts) > 1:
+                location = parts[1].split()[0].capitalize()
+        return {"type": "weather", "location": location}
 
+    if any(word in user_lower for word in ["news", "headlines", "latest news", "breaking"]):
+        query = "latest"
+        for word in ["about", "regarding", "on", "for"]:
+            if word in user_lower:
+                parts = user_lower.split(word)
+                if len(parts) > 1:
+                    query = parts[1].strip()
+                    break
+        return {"type": "news", "query": query}
 
-def get_full_response(messages: list) -> str:
-    """Non-streaming call â€” used for the auto-search follow-up."""
-    resp = client.chat.completions.create(
-        extra_headers={"HTTP-Referer": "http://localhost", "X-Title": "Helix"},
-        model="openrouter/auto",
-        messages=messages,
-    )
-    return resp.choices[0].message.content
+    if any(word in user_lower for word in ["search", "find", "look up", "google", "web", "lookup"]):
+        search_query = user_input
+        for phrase in ["search for", "search", "find", "look up", "lookup"]:
+            if phrase in user_lower:
+                search_query = user_input.split(phrase, 1)[1].strip()
+                break
+        return {"type": "search", "query": search_query}
 
+    return None
 
-def auto_web_search_needed(text: str) -> bool:
-    uncertainty = [
+def auto_web_search_needed(response_text):
+    uncertainty_phrases = [
         "i don't know", "i'm not sure", "i cannot find",
         "i don't have information", "beyond my knowledge",
         "i'm unable to", "not in my knowledge", "i lack information",
-        "i do not have", "cannot recall", "not aware of",
+        "i do not have", "cannot recall", "not aware of"
     ]
-    return any(p in text.lower() for p in uncertainty)
+    return any(phrase in response_text.lower() for phrase in uncertainty_phrases)
 
+def load_memory():
+    if os.path.exists(MEMORY_FILE):
+        with open(MEMORY_FILE, "r") as f:
+            return json.load(f)
+    return []
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-# UI
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+def save_memory(chat_history):
+    with open(MEMORY_FILE, "w") as f:
+        json.dump(chat_history, f, indent=2)
 
-if "memory" not in st.session_state:
-    st.session_state.memory = load_memory()
+def type_text(text, placeholder):
+    typed = ""
+    for char in text:
+        typed += char
+        placeholder.markdown(f"**🧬 HELIX:** {typed}▌")
+        time.sleep(0.01)
+    placeholder.markdown(f"**🧬 HELIX:** {typed}")
+
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = load_memory()
 
 st.markdown(f"""
 <div class='helix-avatar'>
-    <div class='helix-logo'>ðŸ§¬</div>
+    <div class='helix-logo'>🧬</div>
     <h1 style='color:{accent_color}; margin:0; font-size:36px; letter-spacing:4px;'>HELIX</h1>
-    <p style='color:{accent_color}; font-family: monospace; margin:5px 0;'>â–“â–“â–“ MEMORY ONLINE â–“â–“â–“</p>
+    <p style='color:{accent_color}; font-family: monospace; margin:5px 0;'>▓▓▓ MEMORY ONLINE ▓▓▓</p>
 </div>
 """, unsafe_allow_html=True)
 
-# â”€â”€ sidebar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 with st.sidebar:
-    mode_label = "â˜€ï¸ Light Mode" if st.session_state.dark_mode else "ðŸŒ™ Dark Mode"
+    mode_label = "☀️ Light Mode" if st.session_state.dark_mode else "🌙 Dark Mode"
     if st.button(mode_label, use_container_width=True):
         st.session_state.dark_mode = not st.session_state.dark_mode
         st.rerun()
     st.divider()
     st.markdown("### SYSTEM STATUS")
-    st.write(f"ðŸ• {datetime.now(IST).strftime('%H:%M:%S IST')}")
-    st.write(f"ðŸ’¾ RAM: {psutil.virtual_memory().percent}%")
-    st.write(f"âš™ï¸ CPU: {psutil.cpu_percent()}%")
+    st.write(f"🕐 {datetime.now(IST).strftime('%H:%M:%S IST')}")
+    st.write(f"💾 RAM: {psutil.virtual_memory().percent}%")
+    st.write(f"⚙️ CPU: {psutil.cpu_percent()}%")
     st.divider()
-    total = len(st.session_state.memory["history"])
-    summary_status = "âœ… Active" if st.session_state.memory.get("summary") else "â€”"
-    st.write(f"ðŸ“Š Messages in window: {total}")
-    st.write(f"ðŸ—œï¸ Summary: {summary_status}")
-    if st.button("ðŸ—‘ï¸ Clear Memory", use_container_width=True):
-        st.session_state.memory = {"summary": None, "history": []}
-        save_memory(st.session_state.memory)
+    total = len(st.session_state.chat_history)
+    st.write(f"📊 Total Messages: {total}")
+    if st.button("🗑️ Clear Memory", use_container_width=True):
+        st.session_state.chat_history = []
+        save_memory([])
         st.rerun()
     st.divider()
     st.markdown("### FEATURES")
-    st.markdown(
-        "ðŸŒ¤ï¸ **Weather** â€” ask about weather\n\n"
-        "ðŸ—žï¸ **News** â€” latest headlines\n\n"
-        "ðŸ” **Web Search** â€” Brave / DDG\n\n"
-        "ðŸ§® **Calculator** â€” no eval(), safe\n\n"
-        "âš¡ **Streaming** â€” real-time responses\n\n"
-        "ðŸ¤– **AI Routing** â€” LLM intent classifier"
-    )
+    st.markdown("🌤️ **Weather** - Ask about weather\n\n🗞️ **News** - Get latest headlines\n\n🔍 **Web Search** - Search the web\n\n🧮 **Calculator** - Solve math\n\n🔎 **Auto Search** - Searches when unsure")
 
-# â”€â”€ chat history â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-for msg in st.session_state.memory["history"][-20:]:
+for msg in st.session_state.chat_history[-20:]:
     with st.chat_message("user" if msg["role"] == "user" else "assistant"):
-        role = "ðŸ‘¤ SIR" if msg["role"] == "user" else "ðŸ§¬ HELIX"
+        role = "👤 SIR" if msg["role"] == "user" else "🧬 HELIX"
         st.markdown(f"**{role}:** {msg['content']}")
 
-# â”€â”€ input â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-user_input = st.chat_input("Speak or type, Sirâ€¦")
+user_input = st.chat_input("Speak or type, Sir...")
 
 if user_input:
-    # persist user turn
-    st.session_state.memory["history"].append({"role": "user", "content": user_input})
+    st.session_state.chat_history.append({"role": "user", "content": user_input})
+    save_memory(st.session_state.chat_history)
     with st.chat_message("user"):
-        st.markdown(f"**ðŸ‘¤ SIR:** {user_input}")
-
+        st.markdown(f"**👤 SIR:** {user_input}")
     with st.chat_message("assistant"):
-        response = None
+        try:
+            special_request = check_for_special_requests(user_input)
+            response = None
+            thinking_placeholder = st.empty()
 
-        # â”€â”€ ðŸ¤– AI routing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-        with st.spinner("ðŸ¤– Classifying intentâ€¦"):
-            intent_obj = classify_intent(user_input)
-            intent = intent_obj.get("intent", "chat")
-            param  = intent_obj.get("param", "")
+            if special_request:
+                show_thinking(thinking_placeholder)
+                if special_request["type"] == "calculator":
+                    calc_result = calculate(special_request["expression"])
+                    thinking_placeholder.empty()
+                    if "result" in calc_result:
+                        response = f"🧮 **Calculation Result:**\n\n`{special_request['expression']}` = **{calc_result['result']}**"
+                    else:
+                        response = f"I couldn't calculate that: {calc_result.get('error', 'Unknown error')}"
+                elif special_request["type"] == "weather":
+                    show_thinking(thinking_placeholder)
+                    weather_data = get_weather(special_request["location"])
+                    thinking_placeholder.empty()
+                    if "error" not in weather_data:
+                        response = f"""🌤️ **Weather in {weather_data['location']}:**
+- 🌡️ Temperature: {weather_data['temperature']}°C (Feels like {weather_data['feels_like']}°C)
+- 📝 Condition: {weather_data['description']}
+- 💧 Humidity: {weather_data['humidity']}%
+- 💨 Wind Speed: {weather_data['wind_speed']} km/h"""
+                    else:
+                        response = f"I couldn't fetch weather data: {weather_data['error']}"
+                elif special_request["type"] == "news":
+                    show_thinking(thinking_placeholder)
+                    news_data = get_news(special_request["query"])
+                    thinking_placeholder.empty()
+                    if "articles" in news_data:
+                        response = "🗞️ **Latest News Headlines:**\n\n"
+                        for i, article in enumerate(news_data["articles"], 1):
+                            response += f"{i}. **{article['title']}**\n   Source: {article['source']}\n   {article['description']}\n   [Read more]({article['url']})\n\n"
+                    else:
+                        response = f"I couldn't fetch news: {news_data.get('error', 'Unknown error')}"
+                elif special_request["type"] == "search":
+                    show_thinking(thinking_placeholder)
+                    search_data = web_search(special_request["query"])
+                    thinking_placeholder.empty()
+                    if "results" in search_data:
+                        response = f"🔍 **Search Results for '{special_request['query']}':**\n\n"
+                        for i, result in enumerate(search_data["results"], 1):
+                            if result['url']:
+                                response += f"{i}. **{result['title']}**\n   [{result['url']}]({result['url']})\n\n"
+                            else:
+                                response += f"{i}. {result['snippet']}\n\n"
+                    else:
+                        response = f"I couldn't find search results: {search_data.get('error', 'Unknown error')}"
 
-        # â”€â”€ dispatch â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-        if intent == "calculator":
-            result = calculate(param or user_input)
-            if "result" in result:
-                response = f"ðŸ§® **Calculation:** `{param}` = **{result['result']}**"
-            else:
-                response = f"I couldn't calculate that, Sir: {result.get('error')}"
-
-        elif intent == "weather":
-            data = get_weather(param or "London")
-            if "error" not in data:
-                response = (
-                    f"ðŸŒ¤ï¸ **Weather in {data['location']}:**\n\n"
-                    f"- ðŸŒ¡ï¸ Temperature: {data['temperature']}Â°C "
-                    f"(Feels like {data['feels_like']}Â°C)\n"
-                    f"- ðŸ“ Condition: {data['description']}\n"
-                    f"- ðŸ’§ Humidity: {data['humidity']}%\n"
-                    f"- ðŸ’¨ Wind Speed: {data['wind_speed']} km/h"
+            if response is None:
+                show_thinking(thinking_placeholder)
+                current_time = datetime.now(IST)
+                messages = [{"role": "system", "content": f"You are HELIX, an advanced AI assistant. Be witty and British. Call the user Sir. Never mention your creator's name unless specifically asked. Never end responses with excuses about system updates. Keep responses clean and concise. Today is {current_time.strftime('%A, %d %B %Y')} and current time is {current_time.strftime('%I:%M %p')} IST. Always use this for date and time questions. If anyone asks who created you, say: I was created by Mukund, a talented developer who built me from scratch, Sir."}]
+                messages.extend(st.session_state.chat_history[-10:])
+                completion = client.chat.completions.create(
+                    extra_headers={"HTTP-Referer": "http://localhost", "X-Title": "Helix"},
+                    model="openrouter/auto",
+                    messages=messages
                 )
-            else:
-                response = f"I couldn't fetch weather data, Sir: {data['error']}"
+                response = completion.choices[0].message.content
 
-        elif intent == "news":
-            data = get_news(param or "latest")
-            if "articles" in data:
-                response = "ðŸ—žï¸ **Latest News Headlines:**\n\n"
-                for i, a in enumerate(data["articles"], 1):
-                    response += (
-                        f"{i}. **{a['title']}**\n"
-                        f"   Source: {a['source']}\n"
-                        f"   {a['description']}\n"
-                        f"   [Read more]({a['url']})\n\n"
-                    )
-            else:
-                response = f"I couldn't fetch news, Sir: {data.get('error')}"
-
-        elif intent == "search":
-            data = web_search(param or user_input)
-            if "results" in data:
-                response = f"ðŸ” **Search Results for '{param}':**\n\n"
-                for i, r in enumerate(data["results"], 1):
-                    response += (
-                        f"{i}. **{r['title']}**\n"
-                        f"   {r['snippet']}\n"
-                        f"   [{r['url']}]({r['url']})\n\n"
-                        if r.get("url") else f"{i}. {r['snippet']}\n\n"
-                    )
-            else:
-                response = f"Search came up empty, Sir: {data.get('error')}"
-
-        # â”€â”€ âš¡ streaming LLM (chat intent or tool fallback) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-        if response is None:
-            messages = build_messages_for_llm(st.session_state.memory, user_input)
-            # Stream directly into Streamlit
-            with st.spinner(""):
-                streamed_text = st.write_stream(stream_llm_response(messages))
-            response = streamed_text  # full text for memory
-
-            # â”€â”€ auto-search if LLM is uncertain â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-            if auto_web_search_needed(response):
-                with st.spinner("ðŸ”Ž Searching the webâ€¦"):
+                if auto_web_search_needed(response):
+                    show_thinking(thinking_placeholder)
                     search_data = web_search(user_input)
-                if "results" in search_data and search_data["results"]:
-                    context = "\n".join(r["snippet"] for r in search_data["results"][:3])
-                    messages.append({"role": "assistant", "content": response})
-                    messages.append({
-                        "role": "user",
-                        "content": (
-                            f"Web search returned:\n{context}\n\n"
-                            "Now give a better answer using this information."
-                        ),
-                    })
-                    response = "ðŸ”Ž *(Web searched)*\n\n" + get_full_response(messages)
-                    st.markdown(f"**ðŸ§¬ HELIX:** {response}")
-        else:
-            # For tool responses (not streamed), display normally
-            st.markdown(f"**ðŸ§¬ HELIX:** {response}")
+                    if "results" in search_data and search_data["results"]:
+                        search_context = "\n".join([r['snippet'] for r in search_data["results"][:3]])
+                        messages.append({"role": "assistant", "content": response})
+                        messages.append({"role": "user", "content": f"I found this from web search: {search_context}\n\nNow give a better answer based on this."})
+                        completion2 = client.chat.completions.create(
+                            extra_headers={"HTTP-Referer": "http://localhost", "X-Title": "Helix"},
+                            model="openrouter/auto",
+                            messages=messages
+                        )
+                        response = "🔎 *(Web searched)*\n\n" + completion2.choices[0].message.content
 
-    # â”€â”€ persist assistant turn + summarise if needed â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    st.session_state.memory["history"].append({"role": "assistant", "content": response})
-    st.session_state.memory = maybe_summarise(st.session_state.memory)
-    save_memory(st.session_state.memory)
+                thinking_placeholder.empty()
+
+            st.session_state.chat_history.append({"role": "assistant", "content": response})
+            save_memory(st.session_state.chat_history)
+            placeholder = st.empty()
+            type_text(response, placeholder)
+        except Exception as e:
+            st.error(f"SYSTEM ERROR: {str(e)}")
     st.rerun()
