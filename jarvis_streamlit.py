@@ -5,7 +5,6 @@ import pytz
 import time
 import math
 import re
-import operator
 from datetime import datetime
 from dotenv import load_dotenv
 import streamlit as st
@@ -81,6 +80,8 @@ st.markdown(f"""
             border-radius: 20px !important;
             border: 1px solid {accent_color} !important;
         }}
+
+        /* Spinning Ring Animation */
         .helix-thinking {{
             display: flex;
             justify-content: left;
@@ -95,7 +96,10 @@ st.markdown(f"""
             border-top: 3px solid #4fc3f7;
             border-right: 3px solid #00e5ff;
             border-bottom: 3px solid #0077ff;
-            box-shadow: 0 0 10px #4fc3f7, 0 0 20px #00e5ff, inset 0 0 10px rgba(79, 195, 247, 0.2);
+            box-shadow:
+                0 0 10px #4fc3f7,
+                0 0 20px #00e5ff,
+                inset 0 0 10px rgba(79, 195, 247, 0.2);
             animation: helixspin 0.8s linear infinite;
         }}
         @keyframes helixspin {{
@@ -108,152 +112,12 @@ st.markdown(f"""
 MEMORY_FILE = "jarvis_memory.json"
 IST = pytz.timezone('Asia/Kolkata')
 
-# ==========================================
-# 🚨 SAFE CALCULATOR - No eval()
-# ==========================================
-def safe_calculate(expression):
-    try:
-        expr = expression.lower().strip()
-        expr = expr.replace(" ", "")
-        expr = expr.replace("^", "**")
-        expr = expr.replace("x", "*")
-
-        # Handle sqrt
-        sqrt_match = re.search(r'sqrt\(?(\d+\.?\d*)\)?', expr)
-        if sqrt_match:
-            num = float(sqrt_match.group(1))
-            return {"result": round(math.sqrt(num), 6)}
-
-        # Handle basic operations safely
-        # Only allow digits and operators
-        if re.match(r'^[\d\.\+\-\*\/\(\)\s]+$', expr):
-            # Parse manually
-            result = safe_eval(expr)
-            if result is not None:
-                return {"result": round(float(result), 6)}
-
-        # Try trig functions
-        sin_match = re.search(r'sin\(?(\d+\.?\d*)\)?', expr)
-        cos_match = re.search(r'cos\(?(\d+\.?\d*)\)?', expr)
-        tan_match = re.search(r'tan\(?(\d+\.?\d*)\)?', expr)
-        log_match = re.search(r'log\(?(\d+\.?\d*)\)?', expr)
-
-        if sin_match:
-            return {"result": round(math.sin(math.radians(float(sin_match.group(1)))), 6)}
-        if cos_match:
-            return {"result": round(math.cos(math.radians(float(cos_match.group(1)))), 6)}
-        if tan_match:
-            return {"result": round(math.tan(math.radians(float(tan_match.group(1)))), 6)}
-        if log_match:
-            return {"result": round(math.log10(float(log_match.group(1))), 6)}
-
-        return {"error": "Could not parse expression"}
-    except Exception as e:
-        return {"error": str(e)}
-
-def safe_eval(expr):
-    """Safely evaluate basic math without eval()"""
-    try:
-        # Remove spaces
-        expr = expr.replace(" ", "")
-
-        # Handle parentheses recursively
-        while '(' in expr:
-            inner = re.search(r'\(([^()]+)\)', expr)
-            if inner:
-                inner_result = safe_eval(inner.group(1))
-                if inner_result is None:
-                    return None
-                expr = expr[:inner.start()] + str(inner_result) + expr[inner.end():]
-            else:
-                return None
-
-        # Handle + and - (lowest precedence)
-        # Split by + and - but not inside numbers
-        tokens = re.split(r'(?<=[0-9])([+\-])(?=[0-9])', expr)
-        if len(tokens) > 1:
-            result = safe_eval(tokens[0])
-            i = 1
-            while i < len(tokens):
-                op = tokens[i]
-                val = safe_eval(tokens[i+1])
-                if result is None or val is None:
-                    return None
-                if op == '+':
-                    result += val
-                elif op == '-':
-                    result -= val
-                i += 2
-            return result
-
-        # Handle * and /
-        tokens = re.split(r'([*\/])', expr)
-        if len(tokens) > 1:
-            result = float(tokens[0])
-            i = 1
-            while i < len(tokens):
-                op = tokens[i]
-                val = float(tokens[i+1])
-                if op == '*':
-                    result *= val
-                elif op == '/':
-                    if val == 0:
-                        return None
-                    result /= val
-                i += 2
-            return result
-
-        # Handle ** (power)
-        if '**' in expr:
-            parts = expr.split('**')
-            return float(parts[0]) ** float(parts[1])
-
-        return float(expr)
-    except:
-        return None
-
-# ==========================================
-# 🌐 BETTER WEB SEARCH
-# ==========================================
-def web_search(query):
-    try:
-        # Try Wikipedia API first for factual queries
-        wiki_url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{query.replace(' ', '_')}"
-        wiki_resp = requests.get(wiki_url, timeout=5)
-        if wiki_resp.status_code == 200:
-            wiki_data = wiki_resp.json()
-            if wiki_data.get('extract'):
-                return {"results": [{
-                    "title": wiki_data.get('title', query),
-                    "snippet": wiki_data.get('extract', '')[:500],
-                    "url": wiki_data.get('content_urls', {}).get('desktop', {}).get('page', '')
-                }]}
-
-        # Fallback to DuckDuckGo
-        url = "https://api.duckduckgo.com/"
-        params = {"q": query, "format": "json", "pretty": 1, "no_redirect": 1}
-        response = requests.get(url, params=params, timeout=5)
-        if response.status_code == 200:
-            data = response.json()
-            results = []
-            if data.get('AbstractText'):
-                results.append({
-                    "title": data.get('Heading', 'Search Result'),
-                    "url": data.get('AbstractURL', ''),
-                    "snippet": data.get('AbstractText', '')
-                })
-            if 'RelatedTopics' in data:
-                for topic in data['RelatedTopics'][:4]:
-                    if 'Text' in topic:
-                        results.append({
-                            "title": topic.get('Text', '')[:80],
-                            "url": topic.get('FirstURL', ''),
-                            "snippet": topic.get('Text', '')
-                        })
-            return {"results": results[:5]} if results else {"error": "No results found"}
-    except Exception as e:
-        return {"error": str(e)}
-    return {"error": "Could not perform web search"}
+def show_thinking(placeholder):
+    placeholder.markdown("""
+    <div class='helix-thinking'>
+        <div class='helix-ring'></div>
+    </div>
+    """, unsafe_allow_html=True)
 
 def get_weather(location="London"):
     try:
@@ -292,55 +156,104 @@ def get_news(query="latest", country="us"):
                     "source": article['source']['name'],
                     "description": article['description'],
                     "url": article['url'],
+                    "published_at": article['publishedAt']
                 })
             return {"articles": news_list}
     except Exception as e:
         return {"error": str(e)}
     return {"error": "Could not fetch news"}
 
-# ==========================================
-# 🤖 AI ROUTING - Smarter detection
-# ==========================================
-def route_request(user_input):
-    user_lower = user_input.lower().strip()
+def web_search(query):
+    try:
+        url = "https://api.duckduckgo.com/"
+        params = {"q": query, "format": "json", "pretty": 1, "no_redirect": 1}
+        response = requests.get(url, params=params, timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            results = []
+            if 'RelatedTopics' in data:
+                for topic in data['RelatedTopics'][:5]:
+                    if 'Text' in topic:
+                        results.append({
+                            "title": topic.get('Text', ''),
+                            "url": topic.get('FirstURL', ''),
+                            "snippet": topic.get('Text', '')
+                        })
+            if data.get('AbstractText'):
+                results.insert(0, {
+                    "title": data.get('Heading', 'Search Result'),
+                    "url": data.get('AbstractURL', ''),
+                    "snippet": data.get('AbstractText', '')
+                })
+            return {"results": results[:5]} if results else {"error": "No results found"}
+    except Exception as e:
+        return {"error": str(e)}
+    return {"error": "Could not perform web search"}
 
-    # Calculator
+def calculate(expression):
+    try:
+        expr = expression.lower().strip()
+        expr = expr.replace("x", "*").replace("^", "**")
+        expr = expr.replace("pi", str(math.pi))
+        expr = expr.replace("square root of", "math.sqrt")
+        expr = expr.replace("sqrt of", "math.sqrt")
+        expr = expr.replace("sqrt", "math.sqrt")
+        expr = expr.replace("sin", "math.sin")
+        expr = expr.replace("cos", "math.cos")
+        expr = expr.replace("tan", "math.tan")
+        expr = expr.replace("log", "math.log10")
+        expr = re.sub(r'math\.sqrt\s+(\d+)', r'math.sqrt(\1)', expr)
+        expr = re.sub(r'math\.sqrt\s*\((\d+)\)', r'math.sqrt(\1)', expr)
+        allowed = re.sub(r'[0-9\s\+\-\*\/\.\(\)e]', '',
+                  expr.replace("math.sqrt", "")
+                      .replace("math.sin", "")
+                      .replace("math.cos", "")
+                      .replace("math.tan", "")
+                      .replace("math.log10", "")
+                      .replace("math.pi", ""))
+        if allowed == "":
+            result = eval(expr, {"__builtins__": {}}, {"math": math})
+            return {"result": round(float(result), 6)}
+        return {"error": "Invalid expression"}
+    except Exception as e:
+        return {"error": str(e)}
+
+def check_for_special_requests(user_input):
+    user_lower = user_input.lower()
     math_pattern = re.search(r'[\d]+[\s]*[\+\-\*\/\^][\s]*[\d]+', user_input)
-    sqrt_pattern = re.search(r'(square root of|sqrt)\s*[\d]+', user_lower)
-    trig_pattern = re.search(r'(sin|cos|tan|log)\s*\(?[\d]+', user_lower)
-    if math_pattern or sqrt_pattern or trig_pattern or re.search(r'^(calculate|compute|what is)\s+[\d]', user_lower):
+    sqrt_pattern = re.search(r'(square root of|sqrt\s+of|sqrt)\s*[\d]+', user_lower)
+    if math_pattern or sqrt_pattern or any(word in user_lower for word in ["calculate", "compute"]):
         if sqrt_pattern:
             num = re.search(r'[\d]+', sqrt_pattern.group())
             if num:
-                return {"type": "calculator", "expression": f"sqrt({num.group()})"}
-        if trig_pattern:
-            return {"type": "calculator", "expression": trig_pattern.group()}
+                return {"type": "calculator", "expression": f"math.sqrt({num.group()})"}
         if math_pattern:
             return {"type": "calculator", "expression": math_pattern.group().strip()}
+        expr = re.search(r'[\d\s\+\-\*\/\.\(\)\^]+', user_input)
+        if expr:
+            return {"type": "calculator", "expression": expr.group().strip()}
 
-    # Weather
-    if any(word in user_lower for word in ["weather", "temperature", "forecast", "climate", "raining", "snowing", "humid"]):
+    if any(word in user_lower for word in ["weather", "temperature", "forecast", "climate", "rain", "snow"]):
         location = "London"
-        loc_match = re.search(r'\bin\s+([A-Za-z]+(?:\s+[A-Za-z]+)?)', user_lower)
-        if loc_match:
-            location = loc_match.group(1).title()
+        if "in " in user_lower:
+            parts = user_lower.split("in ")
+            if len(parts) > 1:
+                location = parts[1].split()[0].capitalize()
         return {"type": "weather", "location": location}
 
-    # News
-    if any(word in user_lower for word in ["news", "headlines", "latest news", "breaking news"]):
+    if any(word in user_lower for word in ["news", "headlines", "latest news", "breaking"]):
         query = "latest"
-        for word in ["about", "regarding", "on"]:
+        for word in ["about", "regarding", "on", "for"]:
             if word in user_lower:
-                parts = user_lower.split(word, 1)
+                parts = user_lower.split(word)
                 if len(parts) > 1:
                     query = parts[1].strip()
                     break
         return {"type": "news", "query": query}
 
-    # Web search
-    if any(phrase in user_lower for phrase in ["search for", "look up", "google", "search the web"]):
+    if any(word in user_lower for word in ["search", "find", "look up", "google", "web", "lookup"]):
         search_query = user_input
-        for phrase in ["search for", "search", "look up", "google"]:
+        for phrase in ["search for", "search", "find", "look up", "lookup"]:
             if phrase in user_lower:
                 search_query = user_input.split(phrase, 1)[1].strip()
                 break
@@ -353,14 +266,10 @@ def auto_web_search_needed(response_text):
         "i don't know", "i'm not sure", "i cannot find",
         "i don't have information", "beyond my knowledge",
         "i'm unable to", "not in my knowledge", "i lack information",
-        "i do not have", "cannot recall", "not aware of",
-        "i have no information"
+        "i do not have", "cannot recall", "not aware of"
     ]
     return any(phrase in response_text.lower() for phrase in uncertainty_phrases)
 
-# ==========================================
-# 🧠 BETTER MEMORY
-# ==========================================
 def load_memory():
     if os.path.exists(MEMORY_FILE):
         with open(MEMORY_FILE, "r") as f:
@@ -371,49 +280,13 @@ def save_memory(chat_history):
     with open(MEMORY_FILE, "w") as f:
         json.dump(chat_history, f, indent=2)
 
-def get_smart_context(chat_history, max_messages=20):
-    """Get smart context — keep recent + important messages"""
-    if len(chat_history) <= max_messages:
-        return chat_history
-    # Always keep last 10 messages + first 5 for context
-    return chat_history[:5] + chat_history[-15:]
-
-def show_thinking(placeholder):
-    placeholder.markdown("""
-    <div class='helix-thinking'>
-        <div class='helix-ring'></div>
-    </div>
-    """, unsafe_allow_html=True)
-
-# ==========================================
-# ⚡ STREAMING - Word by word response
-# ==========================================
-def stream_response(messages, placeholder):
-    """Stream response word by word"""
-    try:
-        stream = client.chat.completions.create(
-            extra_headers={"HTTP-Referer": "http://localhost", "X-Title": "Helix"},
-            model="openrouter/auto",
-            messages=messages,
-            stream=True
-        )
-        full_response = ""
-        for chunk in stream:
-            if chunk.choices[0].delta.content is not None:
-                full_response += chunk.choices[0].delta.content
-                placeholder.markdown(f"**🧬 HELIX:** {full_response}▌")
-        placeholder.markdown(f"**🧬 HELIX:** {full_response}")
-        return full_response
-    except Exception:
-        # Fallback to non-streaming
-        completion = client.chat.completions.create(
-            extra_headers={"HTTP-Referer": "http://localhost", "X-Title": "Helix"},
-            model="openrouter/auto",
-            messages=messages
-        )
-        response = completion.choices[0].message.content
-        placeholder.markdown(f"**🧬 HELIX:** {response}")
-        return response
+def type_text(text, placeholder):
+    typed = ""
+    for char in text:
+        typed += char
+        placeholder.markdown(f"**🧬 HELIX:** {typed}▌")
+        time.sleep(0.01)
+    placeholder.markdown(f"**🧬 HELIX:** {typed}")
 
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = load_memory()
@@ -445,7 +318,7 @@ with st.sidebar:
         st.rerun()
     st.divider()
     st.markdown("### FEATURES")
-    st.markdown("🌤️ **Weather** - Ask about weather\n\n🗞️ **News** - Get latest headlines\n\n🔍 **Web Search** - Search the web\n\n🧮 **Calculator** - Solve math\n\n🔎 **Auto Search** - Searches when unsure\n\n⚡ **Streaming** - Real time responses")
+    st.markdown("🌤️ **Weather** - Ask about weather\n\n🗞️ **News** - Get latest headlines\n\n🔍 **Web Search** - Search the web\n\n🧮 **Calculator** - Solve math\n\n🔎 **Auto Search** - Searches when unsure")
 
 for msg in st.session_state.chat_history[-20:]:
     with st.chat_message("user" if msg["role"] == "user" else "assistant"):
@@ -461,23 +334,22 @@ if user_input:
         st.markdown(f"**👤 SIR:** {user_input}")
     with st.chat_message("assistant"):
         try:
-            routed = route_request(user_input)
+            special_request = check_for_special_requests(user_input)
             response = None
             thinking_placeholder = st.empty()
 
-            if routed:
+            if special_request:
                 show_thinking(thinking_placeholder)
-
-                if routed["type"] == "calculator":
-                    calc_result = safe_calculate(routed["expression"])
+                if special_request["type"] == "calculator":
+                    calc_result = calculate(special_request["expression"])
                     thinking_placeholder.empty()
                     if "result" in calc_result:
-                        response = f"🧮 **Result:** `{routed['expression']}` = **{calc_result['result']}**"
+                        response = f"🧮 **Calculation Result:**\n\n`{special_request['expression']}` = **{calc_result['result']}**"
                     else:
-                        response = f"I couldn't calculate that, Sir: {calc_result.get('error', 'Unknown error')}"
-
-                elif routed["type"] == "weather":
-                    weather_data = get_weather(routed["location"])
+                        response = f"I couldn't calculate that: {calc_result.get('error', 'Unknown error')}"
+                elif special_request["type"] == "weather":
+                    show_thinking(thinking_placeholder)
+                    weather_data = get_weather(special_request["location"])
                     thinking_placeholder.empty()
                     if "error" not in weather_data:
                         response = f"""🌤️ **Weather in {weather_data['location']}:**
@@ -486,74 +358,63 @@ if user_input:
 - 💧 Humidity: {weather_data['humidity']}%
 - 💨 Wind Speed: {weather_data['wind_speed']} km/h"""
                     else:
-                        response = f"Couldn't fetch weather, Sir: {weather_data['error']}"
-
-                elif routed["type"] == "news":
-                    news_data = get_news(routed["query"])
+                        response = f"I couldn't fetch weather data: {weather_data['error']}"
+                elif special_request["type"] == "news":
+                    show_thinking(thinking_placeholder)
+                    news_data = get_news(special_request["query"])
                     thinking_placeholder.empty()
                     if "articles" in news_data:
                         response = "🗞️ **Latest News Headlines:**\n\n"
                         for i, article in enumerate(news_data["articles"], 1):
                             response += f"{i}. **{article['title']}**\n   Source: {article['source']}\n   {article['description']}\n   [Read more]({article['url']})\n\n"
                     else:
-                        response = f"Couldn't fetch news, Sir: {news_data.get('error', 'Unknown error')}"
-
-                elif routed["type"] == "search":
-                    search_data = web_search(routed["query"])
+                        response = f"I couldn't fetch news: {news_data.get('error', 'Unknown error')}"
+                elif special_request["type"] == "search":
+                    show_thinking(thinking_placeholder)
+                    search_data = web_search(special_request["query"])
                     thinking_placeholder.empty()
                     if "results" in search_data:
-                        response = f"🔍 **Search Results for '{routed['query']}':**\n\n"
+                        response = f"🔍 **Search Results for '{special_request['query']}':**\n\n"
                         for i, result in enumerate(search_data["results"], 1):
-                            if result.get('url'):
-                                response += f"{i}. **{result['title']}**\n   {result['snippet'][:200]}\n   [Read more]({result['url']})\n\n"
+                            if result['url']:
+                                response += f"{i}. **{result['title']}**\n   [{result['url']}]({result['url']})\n\n"
                             else:
-                                response += f"{i}. {result['snippet'][:200]}\n\n"
+                                response += f"{i}. {result['snippet']}\n\n"
                     else:
-                        response = f"Couldn't find results, Sir: {search_data.get('error', 'Unknown error')}"
+                        response = f"I couldn't find search results: {search_data.get('error', 'Unknown error')}"
 
             if response is None:
                 show_thinking(thinking_placeholder)
                 current_time = datetime.now(IST)
-                system_prompt = f"""You are HELIX, an advanced AI assistant. Follow these rules strictly:
-1. Be witty and British in tone
-2. Call the user Sir
-3. NEVER mention the current time or date unless the user specifically asks
-4. NEVER mention your creator's name unless the user specifically asks "who created you" or "who made you"
-5. Keep responses clean, concise and helpful
-6. Do not end responses with unnecessary remarks about system updates or your own status
-Today is {current_time.strftime('%A, %d %B %Y')} and time is {current_time.strftime('%I:%M %p')} IST — only use this if asked."""
-
-                context = get_smart_context(st.session_state.chat_history)
-                messages = [{"role": "system", "content": system_prompt}]
-                messages.extend(context[:-1])  # exclude last user message as it's already in context
-
-                thinking_placeholder.empty()
-                response_placeholder = st.empty()
-                response = stream_response(messages + [{"role": "user", "content": user_input}], response_placeholder)
+                messages = [{"role": "system", "content": f"You are HELIX, an advanced AI assistant. Be witty and British. Call the user Sir. Never mention your creator's name unless specifically asked. Never end responses with excuses about system updates. Keep responses clean and concise. Today is {current_time.strftime('%A, %d %B %Y')} and current time is {current_time.strftime('%I:%M %p')} IST. Always use this for date and time questions. If anyone asks who created you, say: I was created by Mukund, a talented developer who built me from scratch, Sir."}]
+                messages.extend(st.session_state.chat_history[-10:])
+                completion = client.chat.completions.create(
+                    extra_headers={"HTTP-Referer": "http://localhost", "X-Title": "Helix"},
+                    model="openrouter/auto",
+                    messages=messages
+                )
+                response = completion.choices[0].message.content
 
                 if auto_web_search_needed(response):
                     show_thinking(thinking_placeholder)
                     search_data = web_search(user_input)
                     if "results" in search_data and search_data["results"]:
                         search_context = "\n".join([r['snippet'] for r in search_data["results"][:3]])
-                        followup = [{"role": "system", "content": system_prompt}]
-                        followup.append({"role": "user", "content": user_input})
-                        followup.append({"role": "assistant", "content": response})
-                        followup.append({"role": "user", "content": f"Web search found: {search_context}\n\nGive a better answer using this."})
-                        thinking_placeholder.empty()
-                        response = stream_response(followup, response_placeholder)
-                        response = "🔎 *(Web searched)*\n\n" + response
-                        response_placeholder.markdown(f"**🧬 HELIX:** {response}")
-                    thinking_placeholder.empty()
+                        messages.append({"role": "assistant", "content": response})
+                        messages.append({"role": "user", "content": f"I found this from web search: {search_context}\n\nNow give a better answer based on this."})
+                        completion2 = client.chat.completions.create(
+                            extra_headers={"HTTP-Referer": "http://localhost", "X-Title": "Helix"},
+                            model="openrouter/auto",
+                            messages=messages
+                        )
+                        response = "🔎 *(Web searched)*\n\n" + completion2.choices[0].message.content
 
-            if not (response is None):
-                st.session_state.chat_history.append({"role": "assistant", "content": response})
-                save_memory(st.session_state.chat_history)
+                thinking_placeholder.empty()
 
-                if routed:
-                    result_placeholder = st.empty()
-                    result_placeholder.markdown(f"**🧬 HELIX:** {response}")
-
+            st.session_state.chat_history.append({"role": "assistant", "content": response})
+            save_memory(st.session_state.chat_history)
+            placeholder = st.empty()
+            type_text(response, placeholder)
         except Exception as e:
             st.error(f"SYSTEM ERROR: {str(e)}")
     st.rerun()
