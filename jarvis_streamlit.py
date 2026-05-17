@@ -167,8 +167,7 @@ def web_search(query):
                     "snippet": wiki_data.get('extract', '')[:500],
                     "url": wiki_data.get('content_urls', {}).get('desktop', {}).get('page', '')
                 }]}
-        # Fallback DuckDuckGo
-        def web_search(query):
+    
     try:
         # Try Wikipedia first
         wiki_url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{query.replace(' ', '_')}"
