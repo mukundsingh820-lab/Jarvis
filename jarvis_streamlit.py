@@ -273,7 +273,7 @@ def auto_web_search_needed(response_text):
     "up-to-date", "most recent", "latest information",
     "don't have access", "cannot access", "no information"
     ]
-    ]
+    
     return any(phrase in response_text.lower() for phrase in uncertainty_phrases)
 
 def load_memory():
