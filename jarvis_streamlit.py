@@ -266,10 +266,13 @@ def check_for_special_requests(user_input):
 
 def auto_web_search_needed(response_text):
     uncertainty_phrases = [
-        "i don't know", "i'm not sure", "i cannot find",
-        "i don't have information", "beyond my knowledge",
-        "i'm unable to", "not in my knowledge", "i lack information",
-        "i do not have", "cannot recall", "not aware of"
+    "i don't know", "i'm not sure", "i cannot find",
+    "i don't have information", "beyond my knowledge",
+    "i'm unable to", "not in my knowledge", "i lack information",
+    "i do not have", "cannot recall", "not aware of",
+    "up-to-date", "most recent", "latest information",
+    "don't have access", "cannot access", "no information"
+    ]
     ]
     return any(phrase in response_text.lower() for phrase in uncertainty_phrases)
 
