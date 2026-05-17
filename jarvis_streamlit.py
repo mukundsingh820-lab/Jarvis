@@ -191,7 +191,23 @@ def web_search(query):
             return {"results": results[:5]} if results else {"error": "No results found"}
     except Exception as e:
         return {"error": str(e)}
-    return {"error": "Could not perform web search"}
+    def web_search(query):
+    try:
+        # Try Wikipedia first
+        wiki_url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{query.replace(' ', '_')}"
+        wiki_resp = requests.get(wiki_url, timeout=5)
+        if wiki_resp.status_code == 200:
+            wiki_data = wiki_resp.json()
+            if wiki_data.get('extract'):
+                return {"results": [{
+                    "title": wiki_data.get('title', query),
+                    "snippet": wiki_data.get('extract', '')[:500],
+                    "url": wiki_data.get('content_urls', {}).get('desktop', {}).get('page', '')
+                }]}
+        # Fallback DuckDuckGo
+        url = "https://api.duckduckgo.com/"
+        params = {"q": query, "format": "json", "no_redirect": 1}
+        response = requests.get(url, params=params, timeout=5)
         if response.status_code == 200:
             data = response.json()
             results = []
@@ -212,6 +228,7 @@ def web_search(query):
     except Exception as e:
         return {"error": str(e)}
     return {"error": "Could not perform web search"}
+            
 
 def calculate(expression):
     try:
