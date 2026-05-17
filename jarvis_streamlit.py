@@ -236,7 +236,9 @@ def check_for_special_requests(user_input):
         if expr:
             return {"type": "calculator", "expression": expr.group().strip()}
 
-    if any(word in user_lower for word in ["weather", "temperature", "forecast", "climate", "rain", "snow"]):
+    current_events = ["who won", "winner", "champion", "scored", "elected", "released", "launched", "died", "born", "married", "arrested", "2024", "2025", "2026", "latest", "recent", "current", "today", "yesterday", "this year", "this month", "ipl", "cricket", "match", "tournament", "election", "movie", "song"]
+if any(word in user_lower for word in current_events):
+    return {"type": "search", "query": user_input}
         location = "London"
         if "in " in user_lower:
             parts = user_lower.split("in ")
