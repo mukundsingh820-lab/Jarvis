@@ -1,6 +1,6 @@
 streamlit
-openai
+groq
 python-dotenv
 psutil
-pytz
 requests
+pytz
