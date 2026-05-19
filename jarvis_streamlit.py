@@ -526,4 +526,4 @@ with st.sidebar:
     # System stats
     st.markdown(f"<p style='font-size:11px;color:{D['muted']};letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;'>System</p>", unsafe_allow_html=True)
     st.markdown(f"""
-    <div styl
+    <div styl>
