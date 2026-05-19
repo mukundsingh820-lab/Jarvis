@@ -4,3 +4,4 @@ python-dotenv
 psutil
 requests
 pytz
+supabase
