@@ -32,74 +32,156 @@ if "dark_mode" not in st.session_state:
     st.session_state.dark_mode = True
 
 if st.session_state.dark_mode:
-    bg_color = "#0a0e27"
-    text_color = "#ffffff"
-    surface_color = "#1a1f3a"
-    accent_color = "#4fc3f7"
+    bg_color = "#030d07"
+    text_color = "#d4f5e2"
+    surface_color = "#0d1f12"
+    accent_color = "#00e676"
 else:
-    bg_color = "#f0f4f8"
-    text_color = "#1a1a2e"
+    bg_color = "#f0fff4"
+    text_color = "#0d2b14"
     surface_color = "#ffffff"
-    accent_color = "#0077b6"
+    accent_color = "#00875a"
 
+# ── Google Fonts ──
+st.markdown("""
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+""", unsafe_allow_html=True)
+
+# ── Global CSS ──
 st.markdown(f"""
     <style>
-        @media (max-width: 768px) {{
-            .main .block-container {{ padding: 10px !important; }}
-            h1 {{ font-size: 24px !important; }}
+        #MainMenu, footer {{ visibility: hidden; }}
+
+        .stApp {{
+            background-color: {bg_color};
+            color: {text_color};
+            font-family: 'Share Tech Mono', monospace;
         }}
-        .stApp {{ background-color: {bg_color}; color: {text_color}; }}
-        h1, h2, h3 {{ color: {accent_color}; }}
+
+        h1, h2, h3 {{
+            color: {accent_color};
+            font-family: 'Orbitron', sans-serif;
+            letter-spacing: 3px;
+        }}
+
+        /* ── Chat messages ── */
         .stChatMessage {{
-            background-color: {surface_color};
-            border-left: 3px solid {accent_color};
-            border-radius: 10px;
-            padding: 10px;
-            margin: 5px 0;
+            background: linear-gradient(135deg, {surface_color}ee, {surface_color}88) !important;
+            border-left: 2px solid {accent_color}99 !important;
+            border-radius: 0 12px 12px 0 !important;
+            padding: 12px 16px !important;
+            margin: 8px 0 !important;
+            box-shadow: 0 2px 20px {accent_color}0d !important;
         }}
-        .helix-avatar {{ text-align: center; padding: 20px; }}
-        .helix-logo {{
-            font-size: 80px;
-            filter: drop-shadow(0 0 20px {accent_color});
-            animation: glow 2s ease-in-out infinite alternate;
-        }}
-        @keyframes glow {{
-            from {{ filter: drop-shadow(0 0 10px {accent_color}); }}
-            to {{ filter: drop-shadow(0 0 30px {accent_color}); }}
-        }}
-        .stChatInput input {{
+
+        /* ── Chat input ── */
+        .stChatInput input, .stChatInput textarea {{
             background-color: {surface_color} !important;
             color: {text_color} !important;
-            border: 2px solid {accent_color} !important;
-            border-radius: 20px !important;
+            border: 1px solid {accent_color}55 !important;
+            border-radius: 8px !important;
+            font-family: 'Share Tech Mono', monospace !important;
+            transition: border-color 0.2s, box-shadow 0.2s !important;
         }}
+        .stChatInput input:focus, .stChatInput textarea:focus {{
+            border-color: {accent_color} !important;
+            box-shadow: 0 0 12px {accent_color}33 !important;
+            outline: none !important;
+        }}
+
+        /* ── Buttons ── */
         .stButton button {{
-            border-radius: 20px !important;
-            border: 1px solid {accent_color} !important;
+            background: transparent !important;
+            color: {accent_color} !important;
+            border: 1px solid {accent_color}55 !important;
+            border-radius: 4px !important;
+            font-family: 'Share Tech Mono', monospace !important;
+            letter-spacing: 1px !important;
+            transition: all 0.2s !important;
         }}
+        .stButton button:hover {{
+            background: {accent_color}18 !important;
+            border-color: {accent_color} !important;
+            box-shadow: 0 0 10px {accent_color}33 !important;
+        }}
+
+        /* ── Sidebar ── */
+        [data-testid="stSidebar"] {{
+            background-color: {surface_color} !important;
+            border-right: 1px solid {accent_color}22 !important;
+        }}
+
+        /* ── Helix avatar ── */
+        .helix-avatar {{
+            text-align: center;
+            padding: 28px 20px 16px;
+        }}
+        .helix-logo {{
+            font-size: 72px;
+            display: block;
+            animation: pulse-glow 2.5s ease-in-out infinite alternate;
+        }}
+        @keyframes pulse-glow {{
+            from {{ filter: drop-shadow(0 0 8px {accent_color}); }}
+            to   {{ filter: drop-shadow(0 0 30px {accent_color}); }}
+        }}
+        .helix-title {{
+            font-family: 'Orbitron', sans-serif;
+            color: {accent_color};
+            font-size: 30px;
+            letter-spacing: 10px;
+            margin: 10px 0 4px;
+        }}
+        .helix-status {{
+            color: {accent_color}88;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 10px;
+            letter-spacing: 3px;
+        }}
+
+        /* ── Thinking spinner ── */
         .helix-thinking {{
             display: flex;
-            justify-content: left;
             align-items: center;
+            gap: 12px;
             padding: 10px;
         }}
         .helix-ring {{
-            width: 36px;
-            height: 36px;
+            width: 28px;
+            height: 28px;
             border-radius: 50%;
-            border: 3px solid transparent;
-            border-top: 3px solid #4fc3f7;
-            border-right: 3px solid #00e5ff;
-            border-bottom: 3px solid #0077ff;
-            box-shadow: 0 0 10px #4fc3f7, 0 0 20px #00e5ff, inset 0 0 10px rgba(79, 195, 247, 0.2);
-            animation: helixspin 0.8s linear infinite;
+            border: 2px solid transparent;
+            border-top: 2px solid {accent_color};
+            border-right: 2px solid {accent_color}66;
+            box-shadow: 0 0 10px {accent_color}66;
+            animation: helixspin 0.7s linear infinite;
+        }}
+        .helix-thinking-text {{
+            color: {accent_color}88;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 11px;
+            letter-spacing: 2px;
         }}
         @keyframes helixspin {{
-            0% {{ transform: rotate(0deg); }}
+            0%   {{ transform: rotate(0deg); }}
             100% {{ transform: rotate(360deg); }}
+        }}
+
+        /* ── Scrollbar ── */
+        ::-webkit-scrollbar {{ width: 3px; }}
+        ::-webkit-scrollbar-track {{ background: {bg_color}; }}
+        ::-webkit-scrollbar-thumb {{ background: {accent_color}44; border-radius: 2px; }}
+        ::-webkit-scrollbar-thumb:hover {{ background: {accent_color}; }}
+
+        /* ── Mobile ── */
+        @media (max-width: 768px) {{
+            .main .block-container {{ padding: 10px !important; }}
+            .helix-title {{ font-size: 22px !important; letter-spacing: 5px !important; }}
         }}
     </style>
 """, unsafe_allow_html=True)
+
+# ── All original functions unchanged ──
 
 MEMORY_FILE = "jarvis_memory.json"
 IST = pytz.timezone('Asia/Kolkata')
@@ -108,6 +190,7 @@ def show_thinking(placeholder):
     placeholder.markdown("""
     <div class='helix-thinking'>
         <div class='helix-ring'></div>
+        <span class='helix-thinking-text'>PROCESSING...</span>
     </div>
     """, unsafe_allow_html=True)
 
@@ -298,14 +381,16 @@ def type_text(text, placeholder):
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = load_memory()
 
+# ── Header ──
 st.markdown(f"""
 <div class='helix-avatar'>
-    <div class='helix-logo'>🧬</div>
-    <h1 style='color:{accent_color}; margin:0; font-size:36px; letter-spacing:4px;'>HELIX</h1>
-    <p style='color:{accent_color}; font-family: monospace; margin:5px 0;'>▓▓▓ MEMORY ONLINE ▓▓▓</p>
+    <span class='helix-logo'>🧬</span>
+    <div class='helix-title'>HELIX</div>
+    <div class='helix-status'>▸ NEURAL CORE ONLINE ◂</div>
 </div>
 """, unsafe_allow_html=True)
 
+# ── Sidebar ──
 with st.sidebar:
     mode_label = "☀️ Light Mode" if st.session_state.dark_mode else "🌙 Dark Mode"
     if st.button(mode_label, use_container_width=True):
@@ -327,11 +412,13 @@ with st.sidebar:
     st.markdown("### FEATURES")
     st.markdown("🌤️ **Weather** - Ask about weather\n\n🗞️ **News** - Get latest headlines\n\n🔍 **Web Search** - Search the web\n\n🧮 **Calculator** - Solve math\n\n🔎 **Auto Search** - Searches when unsure")
 
+# ── Chat history ──
 for msg in st.session_state.chat_history[-20:]:
     with st.chat_message("user" if msg["role"] == "user" else "assistant"):
         role = "👤 SIR" if msg["role"] == "user" else "🧬 HELIX"
         st.markdown(f"**{role}:** {msg['content']}")
 
+# ── Input ──
 user_input = st.chat_input("Speak or type, Sir...")
 
 if user_input:
