@@ -1,4 +1,4 @@
-HELIX AI Assistant — Single-File Version
+HELIX AI Assistant Single-File Version
 =========================================
 All modules merged in dependency order:
   config → utils/logger → utils/retry → utils/http_client
