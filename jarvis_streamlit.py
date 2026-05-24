@@ -1,14 +1,3 @@
-HELIX AI Assistant Single-File Version
-=========================================
-All modules merged in dependency order:
-  config → utils/logger → utils/retry → utils/http_client
-  → agents/calculator → agents/weather → agents/news → agents/search
-  → core/memory → core/intent → core/llm → ui/styles → main
-"""
-
-# ══════════════════════════════════════════════════════════════════════════════
-# STDLIB IMPORTS
-# ══════════════════════════════════════════════════════════════════════════════
 import ast
 import html
 import logging
@@ -372,24 +361,6 @@ _ALLOWED_NODE_TYPES = (
     ast.Add, ast.Sub, ast.Mult, ast.Div, ast.FloorDiv,
     ast.Mod, ast.Pow, ast.USub, ast.UAdd,
 )
-
-# ── Whitelisted math functions ──────────────────────────────────────────────────
-_SAFE_FUNCTIONS: dict[str, Any] = {
-    "sqrt":      math.sqrt,
-    "sin":       math.sin,
-    "cos":       math.cos,
-    "tan":       math.tan,
-    "log":       math.log,
-    "log10":     math.log10,
-    "log2":      math.log2,
-    "ceil":      math.ceil,
-    "floor":     math.floor,
-    "abs":       abs,
-    "round":     round,
-    "factorial": math.factorial,
-}
-
-# ── Whitelisted constants ───────────────────────────────────────────────────────
 _SAFE_CONSTANTS: dict[str, float] = {
     "pi":  math.pi,
     "e":   math.e,
@@ -549,7 +520,8 @@ def calculate(expression: str) -> CalcResult:
         logger.error(f"Calculator unexpected error: {exc}")
         return CalcResult(success=False, error=f"Unexpected error: {exc}")
 
-══════════════════════════════════════════════════════════════════════════════
+
+# ══════════════════════════════════════════════════════════════════════════════
 # agents/weather.py — Weather fetching with caching, retry, and structured output.
 #
 # BEFORE:
@@ -840,7 +812,9 @@ class SearchResponse:
             link = f" [Read more →]({result.url})" if result.url else ""
             lines.append(f"{i}. **{result.title}**\n   {snippet}{link}\n")
         return "\n".join(lines)
-        ── Source: Wikipedia ──────────────────────────────────────────────────────────
+
+
+# ── Source: Wikipedia ──────────────────────────────────────────────────────────
 
 @with_retry(max_attempts=2, base_delay=0.3, exceptions=(Exception,))
 def _search_wikipedia(query: str) -> SearchResponse | None:
@@ -1135,8 +1109,6 @@ def message_count() -> int:
 #   - Location extraction captures full multi-word city name
 #   - Confidence threshold: if no intent scores above threshold, return None
 #     (let the LLM handle it)
-# ══════════════════════════════════════════════════════════════════════════════
-
 class IntentType(str, Enum):
     CALCULATOR = "calculator"
     WEATHER    = "weather"
