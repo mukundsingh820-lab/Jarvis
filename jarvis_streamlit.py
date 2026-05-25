@@ -87,16 +87,36 @@ UNCERTAINTY_PHRASES: list[str] = [
 
 THEMES: dict[str, dict[str, str]] = {
     "dark": {
-        "bg": "#0a0e27",
-        "text": "#ffffff",
-        "surface": "#1a1f3a",
-        "accent": "#4fc3f7",
+        "bg":          "#080b1a",
+        "bg2":         "#0d1128",
+        "surface":     "#111827",
+        "surface2":    "#1a2035",
+        "border":      "#1e2d4a",
+        "accent":      "#7c6aff",
+        "accent2":     "#a78bfa",
+        "gold":        "#f59e0b",
+        "text":        "#e2e8f0",
+        "text2":       "#94a3b8",
+        "user_bubble": "#1a1f3a",
+        "ai_bubble":   "#0f172a",
+        "user_border": "#7c6aff",
+        "ai_border":   "#f59e0b",
     },
     "light": {
-        "bg": "#f0f4f8",
-        "text": "#1a1a2e",
-        "surface": "#ffffff",
-        "accent": "#0077b6",
+        "bg":          "#f8faff",
+        "bg2":         "#eef2ff",
+        "surface":     "#ffffff",
+        "surface2":    "#f1f5f9",
+        "border":      "#e2e8f0",
+        "accent":      "#6d28d9",
+        "accent2":     "#7c3aed",
+        "gold":        "#d97706",
+        "text":        "#1e293b",
+        "text2":       "#64748b",
+        "user_bubble": "#ede9fe",
+        "ai_bubble":   "#fefce8",
+        "user_border": "#6d28d9",
+        "ai_border":   "#d97706",
     },
 }
 
@@ -874,38 +894,164 @@ def inject_styles(theme_name: str = "dark") -> None:
     t = THEMES.get(theme_name, THEMES["dark"])
     st.markdown(f"""
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+        * {{ transition: background-color 0.4s ease, color 0.3s ease, border-color 0.3s ease; }}
+
         @media (max-width: 768px) {{
-            .main .block-container {{ padding: 10px !important; }}
-            h1 {{ font-size: 24px !important; }}
+            .main .block-container {{ padding: 8px !important; }}
         }}
-        .stApp {{ background-color: {t['bg']}; color: {t['text']}; }}
-        h1, h2, h3 {{ color: {t['accent']}; }}
-        .stChatMessage {{
-            background-color: {t['surface']};
-            border-left: 3px solid {t['accent']};
-            border-radius: 10px;
-            padding: 10px;
-            margin: 5px 0;
+
+        .stApp {{
+            background: linear-gradient(135deg, {t['bg']} 0%, {t['bg2']} 100%);
+            color: {t['text']};
+            font-family: 'Inter', sans-serif;
         }}
-        .helix-logo {{
-            font-size: 80px;
-            filter: drop-shadow(0 0 20px {t['accent']});
-            animation: helixGlow 2s ease-in-out infinite alternate;
+
+        .main .block-container {{
+            max-width: 860px;
+            padding-top: 0 !important;
         }}
-        @keyframes helixGlow {{
-            from {{ filter: drop-shadow(0 0 10px {t['accent']}); }}
-            to   {{ filter: drop-shadow(0 0 30px {t['accent']}); }}
+
+        h1, h2, h3 {{
+            font-family: 'Space Grotesk', sans-serif;
+            color: {t['accent']};
         }}
-        .helix-avatar {{ text-align: center; padding: 20px; }}
-        .stChatInput input {{
-            background-color: {t['surface']} !important;
+
+        /* ── Sidebar ── */
+        [data-testid="stSidebar"] {{
+            background: linear-gradient(180deg, {t['surface']} 0%, {t['surface2']} 100%) !important;
+            border-right: 1px solid {t['border']} !important;
+        }}
+        [data-testid="stSidebar"] * {{
             color: {t['text']} !important;
-            border: 2px solid {t['accent']} !important;
-            border-radius: 20px !important;
         }}
+
+        /* ── User chat bubble ── */
+        [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]),
+        .stChatMessage[data-testid*="user"] {{
+            background: linear-gradient(135deg, {t['user_bubble']} 0%, {t['surface']} 100%) !important;
+            border: 1px solid {t['user_border']} !important;
+            border-left: 4px solid {t['user_border']} !important;
+            border-radius: 18px 18px 4px 18px !important;
+            padding: 14px 18px !important;
+            margin: 8px 0 8px 40px !important;
+            box-shadow: 0 4px 20px rgba(124, 106, 255, 0.1) !important;
+            animation: slideInRight 0.3s ease !important;
+        }}
+
+        /* ── HELIX chat bubble ── */
+        [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"]),
+        .stChatMessage[data-testid*="assistant"] {{
+            background: linear-gradient(135deg, {t['ai_bubble']} 0%, {t['surface2']} 100%) !important;
+            border: 1px solid {t['ai_border']} !important;
+            border-left: 4px solid {t['ai_border']} !important;
+            border-radius: 18px 18px 18px 4px !important;
+            padding: 14px 18px !important;
+            margin: 8px 40px 8px 0 !important;
+            box-shadow: 0 4px 20px rgba(245, 158, 11, 0.08) !important;
+            animation: slideInLeft 0.3s ease !important;
+        }}
+
+        @keyframes slideInRight {{
+            from {{ opacity: 0; transform: translateX(20px); }}
+            to   {{ opacity: 1; transform: translateX(0); }}
+        }}
+        @keyframes slideInLeft {{
+            from {{ opacity: 0; transform: translateX(-20px); }}
+            to   {{ opacity: 1; transform: translateX(0); }}
+        }}
+
+        /* ── Input box ── */
+        [data-testid="stChatInput"] {{
+            border-radius: 30px !important;
+            border: 1.5px solid {t['border']} !important;
+            background: {t['surface']} !important;
+            box-shadow: 0 0 0 0 {t['accent']};
+            transition: box-shadow 0.3s ease, border-color 0.3s ease !important;
+        }}
+        [data-testid="stChatInput"]:focus-within {{
+            border-color: {t['accent']} !important;
+            box-shadow: 0 0 0 3px rgba(124, 106, 255, 0.15) !important;
+        }}
+        [data-testid="stChatInput"] textarea {{
+            background: transparent !important;
+            color: {t['text']} !important;
+            font-family: 'Inter', sans-serif !important;
+        }}
+
+        /* ── Buttons ── */
         .stButton button {{
-            border-radius: 20px !important;
-            border: 1px solid {t['accent']} !important;
+            background: linear-gradient(135deg, {t['accent']} 0%, {t['accent2']} 100%) !important;
+            color: #ffffff !important;
+            border: none !important;
+            border-radius: 12px !important;
+            font-family: 'Inter', sans-serif !important;
+            font-weight: 600 !important;
+            letter-spacing: 0.3px !important;
+            padding: 10px 20px !important;
+            transition: transform 0.2s ease, box-shadow 0.2s ease !important;
+            box-shadow: 0 4px 15px rgba(124, 106, 255, 0.3) !important;
+        }}
+        .stButton button:hover {{
+            transform: translateY(-2px) !important;
+            box-shadow: 0 8px 25px rgba(124, 106, 255, 0.4) !important;
+        }}
+        .stButton button:active {{
+            transform: translateY(0px) !important;
+        }}
+
+        /* ── Divider ── */
+        hr {{
+            border-color: {t['border']} !important;
+            opacity: 0.5 !important;
+        }}
+
+        /* ── Spinner ── */
+        [data-testid="stSpinner"] {{
+            color: {t['accent']} !important;
+        }}
+
+        /* ── Logo glow ── */
+        .helix-logo {{
+            font-size: 72px;
+            filter: drop-shadow(0 0 24px {t['accent']});
+            animation: helixPulse 3s ease-in-out infinite;
+            display: block;
+        }}
+        @keyframes helixPulse {{
+            0%   {{ filter: drop-shadow(0 0 10px {t['accent']}); transform: scale(1); }}
+            50%  {{ filter: drop-shadow(0 0 35px {t['accent2']}); transform: scale(1.05); }}
+            100% {{ filter: drop-shadow(0 0 10px {t['accent']}); transform: scale(1); }}
+        }}
+        .helix-avatar {{ text-align: center; padding: 24px 0 8px 0; }}
+
+        .helix-title {{
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 42px;
+            font-weight: 700;
+            letter-spacing: 10px;
+            background: linear-gradient(135deg, {t['accent']} 0%, {t['gold']} 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin: 0;
+        }}
+
+        .helix-tagline {{
+            font-family: 'Space Grotesk', monospace;
+            font-size: 11px;
+            color: {t['text2']};
+            letter-spacing: 4px;
+            margin: 6px 0 0 0;
+        }}
+
+        .helix-divider {{
+            width: 120px;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, {t['accent']}, {t['gold']}, transparent);
+            margin: 12px auto;
+            border-radius: 2px;
         }}
     </style>
     """, unsafe_allow_html=True)
@@ -913,13 +1059,11 @@ def inject_styles(theme_name: str = "dark") -> None:
 def render_header(accent_color: str) -> None:
     st.markdown(f"""
     <div class='helix-avatar'>
-        <div class='helix-logo'>🧬</div>
-        <h1 style='color:{accent_color}; margin:0; font-size:36px; letter-spacing:4px;'>
-            HELIX
-        </h1>
-        <p style='color:{accent_color}; font-family: monospace; margin:5px 0;'>
-            ▓▓▓ MEMORY ONLINE ▓▓▓
-        </p>
+        <span class='helix-logo'>🧬</span>
+        <div class='helix-divider'></div>
+        <p class='helix-title'>HELIX</p>
+        <p class='helix-tagline'>◈ MEMORY ONLINE &nbsp;·&nbsp; AI ACTIVE &nbsp;·&nbsp; SECURE ◈</p>
+        <div class='helix-divider'></div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -950,18 +1094,18 @@ with st.sidebar:
         st.session_state.dark_mode = not st.session_state.dark_mode
         st.rerun()
     st.divider()
-    st.markdown("### SYSTEM STATUS")
+    st.markdown("### ⚙️ SYSTEM STATUS")
     st.write(f"🕐 {datetime.now(IST).strftime('%H:%M:%S IST')}")
     st.write(f"💾 RAM: {psutil.virtual_memory().percent}%")
     st.write(f"⚙️ CPU: {psutil.cpu_percent()}%")
     st.divider()
     total = message_count()
-    st.write(f"📊 Total Messages: {total}")
+    st.write(f"💬 Messages: {total}")
     if st.button("🗑️ Clear Memory", use_container_width=True):
         clear_memory()
         st.rerun()
     st.divider()
-    st.markdown("### FEATURES")
+    st.markdown("### 🛠️ FEATURES")
     st.markdown(
         "🌤️ **Weather** — Ask about weather\n\n"
         "🗞️ **News** — Get latest headlines\n\n"
