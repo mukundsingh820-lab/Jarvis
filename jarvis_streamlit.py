@@ -411,7 +411,10 @@ class NewsResult:
 def _fetch_news_raw(url: str) -> dict:
     response = http.get(url)
     response.raise_for_status()
-    return json.loads(response.content.decode("utf-8", errors="replace"))
+    content = response.content.decode("utf-8", errors="replace").strip()
+    if not content:
+        raise ValueError("NewsAPI returned an empty response")
+    return json.loads(content)
 
 @st.cache_data(ttl=NEWS_CACHE_TTL, show_spinner=False)
 def get_news(query: str = "latest", country: str = "us") -> NewsResult:
@@ -426,9 +429,8 @@ def get_news(query: str = "latest", country: str = "us") -> NewsResult:
     else:
         encoded_query = query.strip().replace(" ", "+")
         url = (
-            f"https://newsapi.org/v2/everything"
-            f"?q={encoded_query}&sortBy=publishedAt"
-            f"&language=en&pageSize=5&apiKey={NEWS_API_KEY}"
+            f"https://newsapi.org/v2/top-headlines"
+            f"?q={encoded_query}&pageSize=5&apiKey={NEWS_API_KEY}"
         )
     logger.info(f"Fetching news: query='{query}', country='{country}'")
     try:
