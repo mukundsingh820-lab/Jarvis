@@ -492,14 +492,15 @@ class SearchResponse:
 def _search_tavily(query: str) -> SearchResponse | None:
     if not TAVILY_API_KEY:
         return None
-    resp = http.get(
+    resp = http._client.post(
         "https://api.tavily.com/search",
-        params={
+        json={
             "api_key": TAVILY_API_KEY,
             "query": query,
             "max_results": 5,
             "search_depth": "basic",
         },
+        headers={"Content-Type": "application/json"},
     )
     resp.raise_for_status()
     data = json.loads(resp.content.decode("utf-8", errors="replace"))
