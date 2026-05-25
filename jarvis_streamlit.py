@@ -418,42 +418,74 @@ def _fetch_news_raw(url: str) -> dict:
 
 @st.cache_data(ttl=NEWS_CACHE_TTL, show_spinner=False)
 def get_news(query: str = "latest", country: str = "us") -> NewsResult:
-    if not NEWS_API_KEY:
-        logger.warning("get_news called but NEWS_API_KEY is not set")
-        return NewsResult(error="NEWS_API_KEY not configured. Add it to your .env file.")
-    if query.strip().lower() == "latest":
-        url = (
-            f"https://newsapi.org/v2/top-headlines"
-            f"?country={country}&pageSize=5&apiKey={NEWS_API_KEY}"
-        )
-    else:
-        encoded_query = query.strip().replace(" ", "+")
-        url = (
-            f"https://newsapi.org/v2/top-headlines"
-            f"?q={encoded_query}&pageSize=5&apiKey={NEWS_API_KEY}"
-        )
-    logger.info(f"Fetching news: query='{query}', country='{country}'")
-    try:
-        data = _fetch_news_raw(url)
-        if data.get("status") != "ok":
-            error_msg = data.get("message", "Unknown API error")
-            logger.error(f"NewsAPI error: {error_msg}")
-            return NewsResult(error=error_msg)
-        articles = [
-            NewsArticle(
-                title=a.get("title") or "No title",
-                source=a.get("source", {}).get("name", "Unknown"),
-                description=a.get("description"),
-                url=a.get("url", ""),
+    # Try NewsAPI first
+    if NEWS_API_KEY:
+        try:
+            if query.strip().lower() == "latest":
+                url = (
+                    f"https://newsapi.org/v2/top-headlines"
+                    f"?country={country}&pageSize=5&apiKey={NEWS_API_KEY}"
+                )
+            else:
+                encoded_query = query.strip().replace(" ", "+")
+                url = (
+                    f"https://newsapi.org/v2/top-headlines"
+                    f"?q={encoded_query}&pageSize=5&apiKey={NEWS_API_KEY}"
+                )
+            logger.info(f"Fetching news via NewsAPI: query='{query}'")
+            data = _fetch_news_raw(url)
+            if data.get("status") == "ok":
+                articles = [
+                    NewsArticle(
+                        title=a.get("title") or "No title",
+                        source=a.get("source", {}).get("name", "Unknown"),
+                        description=a.get("description"),
+                        url=a.get("url", ""),
+                    )
+                    for a in data.get("articles", [])
+                    if a.get("title")
+                ][:5]
+                if articles:
+                    logger.info(f"News fetched from NewsAPI: {len(articles)} articles")
+                    return NewsResult(articles=articles)
+        except Exception as exc:
+            logger.warning(f"NewsAPI failed: {exc}, falling back to Tavily")
+
+    # Fallback to Tavily for news
+    if TAVILY_API_KEY:
+        try:
+            news_query = f"latest news {query}" if query.lower() != "latest" else "latest breaking news today"
+            logger.info(f"Fetching news via Tavily: query='{news_query}'")
+            resp = http._client.post(
+                "https://api.tavily.com/search",
+                json={
+                    "api_key": TAVILY_API_KEY,
+                    "query": news_query,
+                    "max_results": 5,
+                    "search_depth": "basic",
+                    "topic": "news",
+                },
+                headers={"Content-Type": "application/json"},
             )
-            for a in data.get("articles", [])
-            if a.get("title")
-        ][:5]
-        logger.info(f"News fetched: {len(articles)} articles")
-        return NewsResult(articles=articles)
-    except Exception as exc:
-        logger.error(f"News fetch failed: {exc}")
-        return NewsResult(error=str(exc))
+            resp.raise_for_status()
+            data = json.loads(resp.content.decode("utf-8", errors="replace"))
+            articles = [
+                NewsArticle(
+                    title=r.get("title", "No title"),
+                    source=r.get("url", "").split("/")[2] if r.get("url") else "Unknown",
+                    description=r.get("content", "")[:200],
+                    url=r.get("url", ""),
+                )
+                for r in data.get("results", [])
+                if r.get("title")
+            ][:5]
+            if articles:
+                logger.info(f"News fetched from Tavily: {len(articles)} articles")
+                return NewsResult(articles=articles)
+        except Exception as exc:
+            logger.error(f"Tavily news fallback failed: {exc}")
+
+    return NewsResult(error="Could not fetch news. Check your API keys, Sir.")
 
 # ── Search ─────────────────────────────────────────────────────────────────────
 @dataclass
@@ -462,9 +494,10 @@ class SearchResult:
     snippet: str
     url: str = ""
 
-    def clean_snippet(self, max_len: int = 250) -> str:
+    def clean_snippet(self, max_len: int = 120) -> str:
         text = html.unescape(self.snippet)
         text = re.sub(r"\[\d+\]|\{\{.*?\}\}", "", text)
+        text = re.sub(r"#+\s*", "", text)
         text = re.sub(r"\s+", " ", text).strip()
         if len(text) > max_len:
             text = text[:max_len].rsplit(" ", 1)[0] + "…"
@@ -987,7 +1020,22 @@ if user_input:
                 query = intent.payload.get("query", user_input)
                 with st.spinner(f"Searching for '{query}'…"):
                     search = web_search(query)
-                response = search.format_response(query)
+                if search.success:
+                    context = load_recent(limit=LLM_CONTEXT_LIMIT)
+                    search_context = "\n".join(
+                        r.clean_snippet(200) for r in search.results[:3]
+                    )
+                    context_with_search = list(context) + [{
+                        "role": "user",
+                        "content": (
+                            f"Based on this search data, answer in 1-2 SHORT sentences only: '{user_input}'\n\n"
+                            f"Search data:\n{search_context}"
+                        ),
+                    }]
+                    response_container = st.empty()
+                    response = stream_response(context_with_search, container=response_container)
+                else:
+                    response = search.format_response(query)
 
         if response is None:
             context = load_recent(limit=LLM_CONTEXT_LIMIT)
@@ -999,17 +1047,20 @@ if user_input:
                 with st.spinner("🔎 Searching the web…"):
                     search = web_search(user_input)
                 if search.success:
-                    search_context = "\n\n".join(
-                        r.clean_snippet(400) for r in search.results[:3]
+                    search_context = "\n".join(
+                        r.clean_snippet(200) for r in search.results[:3]
                     )
                     context_with_response = list(context) + [
-                        {"role": "assistant", "content": response}
+                        {"role": "assistant", "content": response},
+                        {
+                            "role": "user",
+                            "content": (
+                                f"Based on this search data, answer in 1-2 SHORT sentences only.\n\n"
+                                f"Search data:\n{search_context}"
+                            ),
+                        },
                     ]
-                    response = stream_with_search_context(
-                        context_with_response,
-                        search_context,
-                        container=response_container,
-                    )
+                    response = stream_response(context_with_response, container=response_container)
 
         if response:
             append_message("assistant", response)
