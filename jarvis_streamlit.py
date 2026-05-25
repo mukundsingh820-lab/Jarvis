@@ -1014,7 +1014,24 @@ if user_input:
                 query = intent.payload.get("query", "latest")
                 with st.spinner("Fetching latest headlines…"):
                     news = get_news(query)
-                response = news.format_response()
+                if news.success:
+                    headlines = "\n".join(
+                        f"- {a.title} ({a.source})"
+                        for a in news.articles
+                    )
+                    context = load_recent(limit=LLM_CONTEXT_LIMIT)
+                    context_with_news = list(context) + [{
+                        "role": "user",
+                        "content": (
+                            f"Here are the latest news headlines. Present them as a clean short numbered list "
+                            f"with just the title and source. No descriptions, no links, no markdown symbols.\n\n"
+                            f"{headlines}"
+                        ),
+                    }]
+                    response_container = st.empty()
+                    response = stream_response(context_with_news, container=response_container)
+                else:
+                    response = news.format_response()
 
             elif intent.type == IntentType.SEARCH:
                 query = intent.payload.get("query", user_input)
