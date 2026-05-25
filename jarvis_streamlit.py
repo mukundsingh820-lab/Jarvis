@@ -1023,8 +1023,9 @@ if user_input:
                     context_with_news = list(context) + [{
                         "role": "user",
                         "content": (
-                            f"Here are the latest news headlines. Present them as a clean short numbered list "
-                            f"with just the title and source. No descriptions, no links, no markdown symbols.\n\n"
+                            f"Present these headlines as a clean numbered list. "
+                            f"Each item on its own line. Format: '1. Title — Source'. "
+                            f"No descriptions. No links. No extra text. Just the list.\n\n"
                             f"{headlines}"
                         ),
                     }]
