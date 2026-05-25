@@ -87,36 +87,46 @@ UNCERTAINTY_PHRASES: list[str] = [
 
 THEMES: dict[str, dict[str, str]] = {
     "dark": {
-        "bg":          "#080b1a",
-        "bg2":         "#0d1128",
-        "surface":     "#111827",
-        "surface2":    "#1a2035",
-        "border":      "#1e2d4a",
-        "accent":      "#7c6aff",
+        "bg":          "#06080f",
+        "bg2":         "#0c0f1e",
+        "bg3":         "#090d1a",
+        "surface":     "rgba(255,255,255,0.06)",
+        "surface2":    "rgba(255,255,255,0.04)",
+        "border":      "rgba(255,255,255,0.10)",
+        "border2":     "rgba(255,255,255,0.06)",
+        "accent":      "#7b7fff",
         "accent2":     "#a78bfa",
-        "gold":        "#f59e0b",
-        "text":        "#e2e8f0",
-        "text2":       "#94a3b8",
-        "user_bubble": "#1a1f3a",
-        "ai_bubble":   "#0f172a",
-        "user_border": "#7c6aff",
-        "ai_border":   "#f59e0b",
+        "accent3":     "#38bdf8",
+        "gold":        "#fbbf24",
+        "text":        "rgba(255,255,255,0.92)",
+        "text2":       "rgba(255,255,255,0.45)",
+        "text3":       "rgba(255,255,255,0.25)",
+        "user_glow":   "rgba(123,127,255,0.18)",
+        "ai_glow":     "rgba(251,191,36,0.12)",
+        "orb1":        "#7b7fff",
+        "orb2":        "#a78bfa",
+        "orb3":        "#38bdf8",
     },
     "light": {
-        "bg":          "#f8faff",
-        "bg2":         "#eef2ff",
-        "surface":     "#ffffff",
-        "surface2":    "#f1f5f9",
-        "border":      "#e2e8f0",
+        "bg":          "#e8eaf6",
+        "bg2":         "#ede9fe",
+        "bg3":         "#f0f4ff",
+        "surface":     "rgba(255,255,255,0.55)",
+        "surface2":    "rgba(255,255,255,0.35)",
+        "border":      "rgba(0,0,0,0.08)",
+        "border2":     "rgba(0,0,0,0.05)",
         "accent":      "#6d28d9",
         "accent2":     "#7c3aed",
+        "accent3":     "#0ea5e9",
         "gold":        "#d97706",
-        "text":        "#1e293b",
-        "text2":       "#64748b",
-        "user_bubble": "#ede9fe",
-        "ai_bubble":   "#fefce8",
-        "user_border": "#6d28d9",
-        "ai_border":   "#d97706",
+        "text":        "rgba(15,15,30,0.90)",
+        "text2":       "rgba(15,15,30,0.45)",
+        "text3":       "rgba(15,15,30,0.25)",
+        "user_glow":   "rgba(109,40,217,0.10)",
+        "ai_glow":     "rgba(217,119,6,0.08)",
+        "orb1":        "#7c3aed",
+        "orb2":        "#6d28d9",
+        "orb3":        "#0ea5e9",
     },
 }
 
@@ -894,27 +904,71 @@ def inject_styles(theme_name: str = "dark") -> None:
     t = THEMES.get(theme_name, THEMES["dark"])
     st.markdown(f"""
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=SF+Pro+Display:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
-        html, body, * {{
-            transition: background-color 0.4s ease, color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+        *, *::before, *::after {{
+            box-sizing: border-box;
+            transition: background 0.5s ease, color 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease, opacity 0.3s ease;
         }}
 
-        @media (max-width: 768px) {{
-            .main .block-container {{ padding: 6px !important; }}
-        }}
-
-        /* ── App background ── */
+        /* ── Deep space background with animated orbs ── */
         .stApp {{
-            background: radial-gradient(ellipse at top left, {t['bg2']} 0%, {t['bg']} 60%);
+            background: {t['bg']} !important;
             color: {t['text']};
-            font-family: 'Inter', sans-serif;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            min-height: 100vh;
+            position: relative;
+            overflow-x: hidden;
+        }}
+
+        /* Animated blurred background orbs - iOS aurora effect */
+        .stApp::before {{
+            content: '';
+            position: fixed;
+            top: -20%;
+            left: -10%;
+            width: 55%;
+            height: 55%;
+            background: radial-gradient(ellipse, {t['orb1']}28 0%, transparent 70%);
+            filter: blur(60px);
+            animation: orbFloat1 12s ease-in-out infinite;
+            pointer-events: none;
+            z-index: 0;
+        }}
+        .stApp::after {{
+            content: '';
+            position: fixed;
+            bottom: -10%;
+            right: -10%;
+            width: 50%;
+            height: 50%;
+            background: radial-gradient(ellipse, {t['orb3']}20 0%, transparent 70%);
+            filter: blur(70px);
+            animation: orbFloat2 15s ease-in-out infinite;
+            pointer-events: none;
+            z-index: 0;
+        }}
+        @keyframes orbFloat1 {{
+            0%,100% {{ transform: translate(0,0) scale(1); }}
+            33%      {{ transform: translate(5%,8%) scale(1.08); }}
+            66%      {{ transform: translate(-3%,4%) scale(0.95); }}
+        }}
+        @keyframes orbFloat2 {{
+            0%,100% {{ transform: translate(0,0) scale(1); }}
+            33%      {{ transform: translate(-6%,-5%) scale(1.1); }}
+            66%      {{ transform: translate(4%,-8%) scale(0.92); }}
         }}
 
         .main .block-container {{
-            max-width: 820px;
+            max-width: 800px;
             padding-top: 0 !important;
-            padding-bottom: 120px !important;
+            padding-bottom: 130px !important;
+            position: relative;
+            z-index: 1;
+        }}
+
+        @media (max-width: 768px) {{
+            .main .block-container {{ padding: 4px 8px 130px 8px !important; }}
         }}
 
         h1, h2, h3 {{
@@ -922,146 +976,191 @@ def inject_styles(theme_name: str = "dark") -> None:
             color: {t['accent']};
         }}
 
-        /* ── Sidebar premium glass ── */
+        /* ── iOS Glass Sidebar ── */
         [data-testid="stSidebar"] {{
-            background: linear-gradient(160deg, {t['surface']}ee 0%, {t['surface2']}cc 100%) !important;
+            background: {t['surface']} !important;
+            backdrop-filter: saturate(180%) blur(40px) !important;
+            -webkit-backdrop-filter: saturate(180%) blur(40px) !important;
             border-right: 1px solid {t['border']} !important;
-            backdrop-filter: blur(20px) !important;
+        }}
+        [data-testid="stSidebar"] > div {{
+            background: transparent !important;
         }}
         [data-testid="stSidebar"] * {{ color: {t['text']} !important; }}
         [data-testid="stSidebar"] h3 {{
             font-family: 'Space Grotesk', sans-serif !important;
-            letter-spacing: 1px !important;
-            font-size: 13px !important;
+            font-size: 11px !important;
+            letter-spacing: 2px !important;
+            text-transform: uppercase !important;
             color: {t['text2']} !important;
         }}
 
-        /* ── User bubble (right side, purple) ── */
+        /* ── User bubble — iOS iMessage right-side glass ── */
         [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) {{
-            background: linear-gradient(135deg, {t['user_bubble']}cc 0%, {t['surface']}aa 100%) !important;
-            border: 1px solid {t['user_border']}55 !important;
-            border-right: 3px solid {t['user_border']} !important;
-            border-radius: 20px 4px 20px 20px !important;
-            padding: 16px 20px !important;
-            margin: 10px 0 10px 60px !important;
-            box-shadow: 0 8px 32px rgba(124,106,255,0.12), inset 0 1px 0 rgba(255,255,255,0.05) !important;
-            backdrop-filter: blur(10px) !important;
-            animation: fadeSlideRight 0.35s cubic-bezier(0.34,1.56,0.64,1) !important;
+            background: {t['surface']} !important;
+            backdrop-filter: saturate(180%) blur(30px) !important;
+            -webkit-backdrop-filter: saturate(180%) blur(30px) !important;
+            border: 1px solid {t['border']} !important;
+            border-top: 1px solid rgba(255,255,255,0.18) !important;
+            border-radius: 22px 6px 22px 22px !important;
+            padding: 14px 18px !important;
+            margin: 8px 0 8px 50px !important;
+            box-shadow:
+                0 2px 6px rgba(0,0,0,0.12),
+                0 12px 40px {t['user_glow']},
+                inset 0 1px 0 rgba(255,255,255,0.12) !important;
+            animation: iosBounceRight 0.4s cubic-bezier(0.34,1.56,0.64,1) !important;
         }}
 
-        /* ── HELIX bubble (left side, gold) ── */
+        /* ── HELIX bubble — iOS iMessage left-side glass ── */
         [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"]) {{
-            background: linear-gradient(135deg, {t['ai_bubble']}cc 0%, {t['surface2']}aa 100%) !important;
-            border: 1px solid {t['ai_border']}44 !important;
-            border-left: 3px solid {t['ai_border']} !important;
-            border-radius: 4px 20px 20px 20px !important;
-            padding: 16px 20px !important;
-            margin: 10px 60px 10px 0 !important;
-            box-shadow: 0 8px 32px rgba(245,158,11,0.10), inset 0 1px 0 rgba(255,255,255,0.03) !important;
-            backdrop-filter: blur(10px) !important;
-            animation: fadeSlideLeft 0.35s cubic-bezier(0.34,1.56,0.64,1) !important;
+            background: {t['surface']} !important;
+            backdrop-filter: saturate(180%) blur(30px) !important;
+            -webkit-backdrop-filter: saturate(180%) blur(30px) !important;
+            border: 1px solid {t['border']} !important;
+            border-top: 1px solid rgba(255,255,255,0.12) !important;
+            border-radius: 6px 22px 22px 22px !important;
+            padding: 14px 18px !important;
+            margin: 8px 50px 8px 0 !important;
+            box-shadow:
+                0 2px 6px rgba(0,0,0,0.10),
+                0 12px 40px {t['ai_glow']},
+                inset 0 1px 0 rgba(255,255,255,0.08) !important;
+            animation: iosBounceLeft 0.4s cubic-bezier(0.34,1.56,0.64,1) !important;
         }}
 
-        @keyframes fadeSlideRight {{
-            from {{ opacity: 0; transform: translateX(30px) scale(0.97); }}
-            to   {{ opacity: 1; transform: translateX(0) scale(1); }}
+        @keyframes iosBounceRight {{
+            0%   {{ opacity: 0; transform: translateX(28px) scale(0.92); }}
+            60%  {{ opacity: 1; transform: translateX(-4px) scale(1.01); }}
+            100% {{ opacity: 1; transform: translateX(0) scale(1); }}
         }}
-        @keyframes fadeSlideLeft {{
-            from {{ opacity: 0; transform: translateX(-30px) scale(0.97); }}
-            to   {{ opacity: 1; transform: translateX(0) scale(1); }}
+        @keyframes iosBounceLeft {{
+            0%   {{ opacity: 0; transform: translateX(-28px) scale(0.92); }}
+            60%  {{ opacity: 1; transform: translateX(4px) scale(1.01); }}
+            100% {{ opacity: 1; transform: translateX(0) scale(1); }}
         }}
 
-        /* ── Premium input bar ── */
+        /* ── Avatar icons inside bubbles ── */
+        [data-testid="stChatMessageAvatarUser"],
+        [data-testid="stChatMessageAvatarAssistant"] {{
+            background: {t['surface']} !important;
+            backdrop-filter: blur(20px) !important;
+            border: 1px solid {t['border']} !important;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.15) !important;
+        }}
+
+        /* ── iOS Liquid Glass Input Bar ── */
         [data-testid="stBottom"] {{
-            background: linear-gradient(0deg, {t['bg']}ff 60%, {t['bg']}00 100%) !important;
-            padding: 16px 0 24px 0 !important;
-            backdrop-filter: blur(24px) !important;
+            background: linear-gradient(to top, {t['bg']} 55%, transparent 100%) !important;
+            padding: 12px 0 28px 0 !important;
+            backdrop-filter: blur(0px) !important;
+            position: relative;
+            z-index: 10;
         }}
         [data-testid="stChatInputContainer"] {{
-            background: {t['surface']}cc !important;
-            border: 1.5px solid {t['border']} !important;
-            border-radius: 28px !important;
-            padding: 4px 6px 4px 18px !important;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.25), 0 0 0 0 {t['accent']}, inset 0 1px 0 rgba(255,255,255,0.06) !important;
-            backdrop-filter: blur(20px) !important;
+            background: {t['surface']} !important;
+            backdrop-filter: saturate(200%) blur(40px) !important;
+            -webkit-backdrop-filter: saturate(200%) blur(40px) !important;
+            border: 1px solid {t['border']} !important;
+            border-top: 1px solid rgba(255,255,255,0.20) !important;
+            border-radius: 30px !important;
+            padding: 5px 6px 5px 20px !important;
+            box-shadow:
+                0 2px 8px rgba(0,0,0,0.15),
+                0 20px 60px rgba(0,0,0,0.20),
+                inset 0 1px 0 rgba(255,255,255,0.15),
+                inset 0 -1px 0 rgba(0,0,0,0.06) !important;
             transition: border-color 0.3s ease, box-shadow 0.3s ease !important;
         }}
         [data-testid="stChatInputContainer"]:focus-within {{
-            border-color: {t['accent']}99 !important;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.3), 0 0 0 4px {t['accent']}18, inset 0 1px 0 rgba(255,255,255,0.06) !important;
+            border-color: {t['accent']}66 !important;
+            box-shadow:
+                0 2px 8px rgba(0,0,0,0.15),
+                0 20px 60px rgba(0,0,0,0.25),
+                0 0 0 3px {t['accent']}18,
+                inset 0 1px 0 rgba(255,255,255,0.18),
+                inset 0 -1px 0 rgba(0,0,0,0.06) !important;
         }}
         [data-testid="stChatInputContainer"] textarea {{
             background: transparent !important;
             color: {t['text']} !important;
-            font-family: 'Inter', sans-serif !important;
+            font-family: 'Inter', -apple-system, sans-serif !important;
             font-size: 15px !important;
             font-weight: 400 !important;
-            line-height: 1.6 !important;
+            line-height: 1.55 !important;
             border: none !important;
             outline: none !important;
             padding: 10px 4px !important;
             caret-color: {t['accent']} !important;
+            letter-spacing: 0.1px !important;
         }}
         [data-testid="stChatInputContainer"] textarea::placeholder {{
-            color: {t['text2']}88 !important;
-            font-style: italic !important;
+            color: {t['text3']} !important;
+            font-weight: 300 !important;
+            letter-spacing: 0.2px !important;
         }}
-        /* Send button inside input */
+        /* Send button — iOS circle glass */
         [data-testid="stChatInputContainer"] button {{
-            background: linear-gradient(135deg, {t['accent']} 0%, {t['accent2']} 100%) !important;
+            background: linear-gradient(145deg, {t['accent']} 0%, {t['accent2']} 100%) !important;
             border: none !important;
-            border-radius: 20px !important;
-            width: 44px !important;
-            height: 44px !important;
-            box-shadow: 0 4px 16px {t['accent']}55 !important;
-            transition: transform 0.2s ease, box-shadow 0.2s ease !important;
+            border-radius: 50% !important;
+            width: 42px !important;
+            height: 42px !important;
+            min-width: 42px !important;
+            box-shadow:
+                0 4px 16px {t['accent']}55,
+                inset 0 1px 0 rgba(255,255,255,0.25) !important;
+            transition: transform 0.2s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.2s ease !important;
             display: flex !important;
             align-items: center !important;
             justify-content: center !important;
+            margin: auto 0 !important;
         }}
         [data-testid="stChatInputContainer"] button:hover {{
-            transform: scale(1.08) !important;
-            box-shadow: 0 6px 24px {t['accent']}77 !important;
+            transform: scale(1.10) !important;
+            box-shadow: 0 8px 28px {t['accent']}66, inset 0 1px 0 rgba(255,255,255,0.3) !important;
         }}
         [data-testid="stChatInputContainer"] button:active {{
-            transform: scale(0.95) !important;
+            transform: scale(0.92) !important;
         }}
         [data-testid="stChatInputContainer"] button svg {{
-            color: #ffffff !important;
-            fill: #ffffff !important;
+            color: #fff !important;
+            fill: #fff !important;
+            width: 18px !important;
+            height: 18px !important;
         }}
 
-        /* ── Sidebar buttons ── */
+        /* ── Sidebar buttons — iOS glass pill ── */
         .stButton button {{
-            background: linear-gradient(135deg, {t['accent']}22 0%, {t['accent2']}11 100%) !important;
+            background: {t['surface']} !important;
+            backdrop-filter: blur(20px) !important;
             color: {t['text']} !important;
             border: 1px solid {t['border']} !important;
-            border-radius: 12px !important;
+            border-top: 1px solid rgba(255,255,255,0.15) !important;
+            border-radius: 14px !important;
             font-family: 'Inter', sans-serif !important;
             font-weight: 500 !important;
             font-size: 13px !important;
-            letter-spacing: 0.3px !important;
             padding: 10px 16px !important;
-            transition: all 0.2s ease !important;
-            box-shadow: none !important;
+            transition: all 0.25s cubic-bezier(0.34,1.56,0.64,1) !important;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.10), inset 0 1px 0 rgba(255,255,255,0.12) !important;
         }}
         .stButton button:hover {{
-            background: linear-gradient(135deg, {t['accent']} 0%, {t['accent2']} 100%) !important;
-            color: #ffffff !important;
-            border-color: transparent !important;
-            transform: translateY(-1px) !important;
-            box-shadow: 0 6px 20px {t['accent']}44 !important;
+            background: linear-gradient(135deg, {t['accent']}33, {t['accent2']}22) !important;
+            border-color: {t['accent']}55 !important;
+            transform: translateY(-1px) scale(1.01) !important;
+            box-shadow: 0 6px 20px {t['accent']}30, inset 0 1px 0 rgba(255,255,255,0.18) !important;
         }}
         .stButton button:active {{
-            transform: translateY(0) !important;
+            transform: scale(0.97) !important;
         }}
 
         /* ── Dividers ── */
         hr {{
             border: none !important;
             height: 1px !important;
-            background: linear-gradient(90deg, transparent, {t['border']}, transparent) !important;
-            margin: 12px 0 !important;
+            background: {t['border']} !important;
+            margin: 10px 0 !important;
         }}
 
         /* ── Spinner ── */
@@ -1069,93 +1168,114 @@ def inject_styles(theme_name: str = "dark") -> None:
             border-top-color: {t['accent']} !important;
         }}
 
-        /* ── Scrollbar ── */
-        ::-webkit-scrollbar {{ width: 4px; }}
+        /* ── Thin iOS scrollbar ── */
+        ::-webkit-scrollbar {{ width: 3px; }}
         ::-webkit-scrollbar-track {{ background: transparent; }}
         ::-webkit-scrollbar-thumb {{
             background: {t['border']};
-            border-radius: 4px;
+            border-radius: 3px;
         }}
-        ::-webkit-scrollbar-thumb:hover {{ background: {t['accent']}66; }}
 
         /* ── Header ── */
         .helix-avatar {{
             text-align: center;
-            padding: 32px 0 12px 0;
+            padding: 36px 0 16px 0;
             position: relative;
+            z-index: 1;
         }}
         .helix-logo {{
-            font-size: 68px;
+            font-size: 66px;
             display: block;
-            filter: drop-shadow(0 0 20px {t['accent']}aa);
-            animation: helixFloat 4s ease-in-out infinite;
+            filter: drop-shadow(0 0 18px {t['accent']}99);
+            animation: helixFloat 5s ease-in-out infinite;
         }}
         @keyframes helixFloat {{
-            0%   {{ transform: translateY(0px) scale(1);   filter: drop-shadow(0 0 16px {t['accent']}88); }}
-            33%  {{ transform: translateY(-6px) scale(1.04); filter: drop-shadow(0 0 30px {t['accent']}cc); }}
-            66%  {{ transform: translateY(-3px) scale(1.02); filter: drop-shadow(0 0 22px {t['accent2']}aa); }}
-            100% {{ transform: translateY(0px) scale(1);   filter: drop-shadow(0 0 16px {t['accent']}88); }}
+            0%,100% {{ transform: translateY(0) scale(1);    filter: drop-shadow(0 0 14px {t['accent']}77); }}
+            40%      {{ transform: translateY(-8px) scale(1.04); filter: drop-shadow(0 0 30px {t['accent']}bb); }}
+            70%      {{ transform: translateY(-4px) scale(1.02); filter: drop-shadow(0 0 20px {t['accent2']}99); }}
+        }}
+        .helix-glass-card {{
+            display: inline-block;
+            background: {t['surface']};
+            backdrop-filter: saturate(180%) blur(30px);
+            -webkit-backdrop-filter: saturate(180%) blur(30px);
+            border: 1px solid {t['border']};
+            border-top: 1px solid rgba(255,255,255,0.18);
+            border-radius: 28px;
+            padding: 18px 40px 20px 40px;
+            margin: 10px auto 0 auto;
+            box-shadow:
+                0 2px 8px rgba(0,0,0,0.12),
+                0 20px 60px rgba(0,0,0,0.15),
+                inset 0 1px 0 rgba(255,255,255,0.15);
         }}
         .helix-title {{
             font-family: 'Space Grotesk', sans-serif;
-            font-size: 44px;
+            font-size: 40px;
             font-weight: 700;
-            letter-spacing: 12px;
-            background: linear-gradient(135deg, {t['accent']} 20%, {t['gold']} 80%);
+            letter-spacing: 14px;
+            background: linear-gradient(135deg, {t['accent']} 10%, {t['accent3']} 50%, {t['gold']} 90%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
-            margin: 8px 0 0 0;
+            margin: 0;
             line-height: 1;
         }}
         .helix-tagline {{
             font-size: 10px;
             color: {t['text2']};
-            letter-spacing: 5px;
-            margin: 10px 0 0 0;
-            font-weight: 500;
+            letter-spacing: 4px;
+            margin: 8px 0 0 0;
+            font-weight: 400;
             text-transform: uppercase;
         }}
         .helix-divider {{
-            width: 100px;
-            height: 1.5px;
-            background: linear-gradient(90deg, transparent, {t['accent']}88, {t['gold']}88, transparent);
-            margin: 14px auto;
-            border-radius: 2px;
+            width: 80px;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, {t['accent']}66, {t['gold']}66, transparent);
+            margin: 10px auto;
         }}
         .helix-dots {{
             display: flex;
             justify-content: center;
-            gap: 6px;
-            margin-top: 6px;
+            gap: 5px;
+            margin-top: 8px;
         }}
         .helix-dot {{
-            width: 5px;
-            height: 5px;
+            width: 4px;
+            height: 4px;
             border-radius: 50%;
             background: {t['accent']};
-            animation: dotPulse 1.8s ease-in-out infinite;
+            animation: dotPulse 2s ease-in-out infinite;
         }}
-        .helix-dot:nth-child(2) {{ background: {t['gold']}; animation-delay: 0.3s; }}
-        .helix-dot:nth-child(3) {{ background: {t['accent2']}; animation-delay: 0.6s; }}
+        .helix-dot:nth-child(2) {{
+            background: {t['accent3']};
+            animation-delay: 0.35s;
+        }}
+        .helix-dot:nth-child(3) {{
+            background: {t['gold']};
+            animation-delay: 0.7s;
+        }}
         @keyframes dotPulse {{
-            0%, 100% {{ opacity: 0.3; transform: scale(0.8); }}
-            50%       {{ opacity: 1;   transform: scale(1.2); }}
+            0%,100% {{ opacity: 0.25; transform: scale(0.7); }}
+            50%      {{ opacity: 1;   transform: scale(1.3); }}
         }}
     </style>
     """, unsafe_allow_html=True)
 
 def render_header(accent_color: str) -> None:
-    st.markdown(f"""
+    st.markdown("""
     <div class='helix-avatar'>
         <span class='helix-logo'>🧬</span>
-        <p class='helix-title'>HELIX</p>
-        <div class='helix-divider'></div>
-        <p class='helix-tagline'>Memory Online &nbsp;·&nbsp; AI Active &nbsp;·&nbsp; Secure</p>
-        <div class='helix-dots'>
-            <div class='helix-dot'></div>
-            <div class='helix-dot'></div>
-            <div class='helix-dot'></div>
+        <div class='helix-glass-card'>
+            <p class='helix-title'>HELIX</p>
+            <div class='helix-divider'></div>
+            <p class='helix-tagline'>Memory Online &nbsp;·&nbsp; AI Active &nbsp;·&nbsp; Secure</p>
+            <div class='helix-dots'>
+                <div class='helix-dot'></div>
+                <div class='helix-dot'></div>
+                <div class='helix-dot'></div>
+            </div>
         </div>
     </div>
     """, unsafe_allow_html=True)
