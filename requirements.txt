@@ -1,7 +1,7 @@
 streamlit
 groq
+httpx[http2]
 python-dotenv
-psutil
-requests
 pytz
-supabase
+psutil
+streamlit-mic-recorder
