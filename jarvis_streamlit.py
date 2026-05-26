@@ -911,9 +911,9 @@ def inject_styles(theme_name: str = "dark") -> None:
             transition: background 0.5s ease, color 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease, opacity 0.3s ease;
         }}
 
-        /* ── Deep space background with animated orbs ── */
+        /* ── Vivid background so glass effect is visible ── */
         .stApp {{
-            background: linear-gradient(145deg, #0e1020 0%, #12162e 40%, #0a0d1f 100%) !important;
+            background: linear-gradient(145deg, #0d0f2e 0%, #10163a 50%, #0a1128 100%) !important;
             color: {t['text']};
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
             min-height: 100vh;
@@ -921,16 +921,16 @@ def inject_styles(theme_name: str = "dark") -> None:
             overflow-x: hidden;
         }}
 
-        /* Animated blurred background orbs - iOS aurora effect */
+        /* Strong vivid orbs — glass needs color behind it to look glassy */
         .stApp::before {{
             content: '';
             position: fixed;
-            top: -20%;
-            left: -10%;
-            width: 55%;
-            height: 55%;
-            background: radial-gradient(ellipse, rgba(180,170,255,0.22) 0%, transparent 70%);
-            filter: blur(70px);
+            top: -15%;
+            left: -5%;
+            width: 60%;
+            height: 60%;
+            background: radial-gradient(ellipse, rgba(120,100,255,0.45) 0%, rgba(80,60,220,0.20) 40%, transparent 70%);
+            filter: blur(55px);
             animation: orbFloat1 12s ease-in-out infinite;
             pointer-events: none;
             z-index: 0;
@@ -939,11 +939,11 @@ def inject_styles(theme_name: str = "dark") -> None:
             content: '';
             position: fixed;
             bottom: -10%;
-            right: -10%;
-            width: 50%;
-            height: 50%;
-            background: radial-gradient(ellipse, rgba(150,220,255,0.16) 0%, transparent 70%);
-            filter: blur(80px);
+            right: -5%;
+            width: 55%;
+            height: 55%;
+            background: radial-gradient(ellipse, rgba(0,200,255,0.30) 0%, rgba(0,150,200,0.15) 40%, transparent 70%);
+            filter: blur(65px);
             animation: orbFloat2 15s ease-in-out infinite;
             pointer-events: none;
             z-index: 0;
@@ -965,6 +965,20 @@ def inject_styles(theme_name: str = "dark") -> None:
             padding-bottom: 130px !important;
             position: relative;
             z-index: 1;
+        }}
+        /* Third orb — pink/magenta in center */
+        .main .block-container::before {{
+            content: '';
+            position: fixed;
+            top: 30%;
+            left: 20%;
+            width: 40%;
+            height: 40%;
+            background: radial-gradient(ellipse, rgba(220,80,180,0.18) 0%, transparent 70%);
+            filter: blur(70px);
+            animation: orbFloat1 18s ease-in-out infinite reverse;
+            pointer-events: none;
+            z-index: 0;
         }}
 
         @media (max-width: 768px) {{
@@ -995,37 +1009,41 @@ def inject_styles(theme_name: str = "dark") -> None:
             color: {t['text2']} !important;
         }}
 
-        /* ── User bubble — whitish milky glass ── */
+        /* ── User bubble — true transparent glass ── */
         [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) {{
-            background: rgba(255,255,255,0.10) !important;
-            backdrop-filter: saturate(180%) blur(30px) !important;
-            -webkit-backdrop-filter: saturate(180%) blur(30px) !important;
-            border: 1px solid rgba(255,255,255,0.20) !important;
-            border-top: 1px solid rgba(255,255,255,0.30) !important;
+            background: rgba(255,255,255,0.07) !important;
+            backdrop-filter: saturate(220%) blur(40px) brightness(1.15) !important;
+            -webkit-backdrop-filter: saturate(220%) blur(40px) brightness(1.15) !important;
+            border: 1px solid rgba(255,255,255,0.22) !important;
+            border-top: 1px solid rgba(255,255,255,0.38) !important;
+            border-left: 1px solid rgba(255,255,255,0.12) !important;
+            border-bottom: 1px solid rgba(255,255,255,0.06) !important;
             border-radius: 22px 6px 22px 22px !important;
             padding: 14px 18px !important;
             margin: 8px 0 8px 50px !important;
             box-shadow:
-                0 2px 6px rgba(0,0,0,0.18),
-                0 12px 40px rgba(123,127,255,0.14),
-                inset 0 1px 0 rgba(255,255,255,0.22) !important;
+                0 4px 24px rgba(0,0,0,0.20),
+                0 1px 0 rgba(255,255,255,0.10) inset,
+                0 12px 40px rgba(120,100,255,0.15) !important;
             animation: iosBounceRight 0.4s cubic-bezier(0.34,1.56,0.64,1) !important;
         }}
 
-        /* ── HELIX bubble — whitish milky glass ── */
+        /* ── HELIX bubble — true transparent glass ── */
         [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"]) {{
-            background: rgba(255,255,255,0.07) !important;
-            backdrop-filter: saturate(180%) blur(30px) !important;
-            -webkit-backdrop-filter: saturate(180%) blur(30px) !important;
-            border: 1px solid rgba(255,255,255,0.14) !important;
-            border-top: 1px solid rgba(255,255,255,0.22) !important;
+            background: rgba(255,255,255,0.05) !important;
+            backdrop-filter: saturate(220%) blur(40px) brightness(1.10) !important;
+            -webkit-backdrop-filter: saturate(220%) blur(40px) brightness(1.10) !important;
+            border: 1px solid rgba(255,255,255,0.16) !important;
+            border-top: 1px solid rgba(255,255,255,0.30) !important;
+            border-left: 1px solid rgba(255,255,255,0.18) !important;
+            border-bottom: 1px solid rgba(255,255,255,0.04) !important;
             border-radius: 6px 22px 22px 22px !important;
             padding: 14px 18px !important;
             margin: 8px 50px 8px 0 !important;
             box-shadow:
-                0 2px 6px rgba(0,0,0,0.14),
-                0 12px 40px rgba(251,191,36,0.08),
-                inset 0 1px 0 rgba(255,255,255,0.16) !important;
+                0 4px 24px rgba(0,0,0,0.16),
+                0 1px 0 rgba(255,255,255,0.08) inset,
+                0 12px 40px rgba(0,200,255,0.10) !important;
             animation: iosBounceLeft 0.4s cubic-bezier(0.34,1.56,0.64,1) !important;
         }}
 
