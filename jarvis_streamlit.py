@@ -921,7 +921,7 @@ def inject_styles(theme_name: str = "dark") -> None:
             overflow-x: hidden;
         }}
 
-        /* Strong vivid orbs — glass needs color behind it to look glassy */
+        /* Soft muted orbs — glassy but easy on eyes */
         .stApp::before {{
             content: '';
             position: fixed;
@@ -929,8 +929,8 @@ def inject_styles(theme_name: str = "dark") -> None:
             left: -5%;
             width: 60%;
             height: 60%;
-            background: radial-gradient(ellipse, rgba(120,100,255,0.45) 0%, rgba(80,60,220,0.20) 40%, transparent 70%);
-            filter: blur(55px);
+            background: radial-gradient(ellipse, rgba(100,80,200,0.22) 0%, rgba(70,50,160,0.10) 40%, transparent 70%);
+            filter: blur(80px);
             animation: orbFloat1 12s ease-in-out infinite;
             pointer-events: none;
             z-index: 0;
@@ -942,8 +942,8 @@ def inject_styles(theme_name: str = "dark") -> None:
             right: -5%;
             width: 55%;
             height: 55%;
-            background: radial-gradient(ellipse, rgba(0,200,255,0.30) 0%, rgba(0,150,200,0.15) 40%, transparent 70%);
-            filter: blur(65px);
+            background: radial-gradient(ellipse, rgba(0,150,200,0.16) 0%, rgba(0,100,160,0.08) 40%, transparent 70%);
+            filter: blur(90px);
             animation: orbFloat2 15s ease-in-out infinite;
             pointer-events: none;
             z-index: 0;
@@ -966,7 +966,7 @@ def inject_styles(theme_name: str = "dark") -> None:
             position: relative;
             z-index: 1;
         }}
-        /* Third orb — pink/magenta in center */
+        /* Third orb — soft muted rose in center */
         .main .block-container::before {{
             content: '';
             position: fixed;
@@ -974,8 +974,8 @@ def inject_styles(theme_name: str = "dark") -> None:
             left: 20%;
             width: 40%;
             height: 40%;
-            background: radial-gradient(ellipse, rgba(220,80,180,0.18) 0%, transparent 70%);
-            filter: blur(70px);
+            background: radial-gradient(ellipse, rgba(180,60,140,0.10) 0%, transparent 70%);
+            filter: blur(90px);
             animation: orbFloat1 18s ease-in-out infinite reverse;
             pointer-events: none;
             z-index: 0;
@@ -1024,15 +1024,15 @@ def inject_styles(theme_name: str = "dark") -> None:
             box-shadow:
                 0 4px 24px rgba(0,0,0,0.20),
                 0 1px 0 rgba(255,255,255,0.10) inset,
-                0 12px 40px rgba(120,100,255,0.15) !important;
+                0 12px 40px rgba(100,80,200,0.08) !important;
             animation: iosBounceRight 0.4s cubic-bezier(0.34,1.56,0.64,1) !important;
         }}
 
         /* ── HELIX bubble — true transparent glass ── */
         [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"]) {{
             background: rgba(255,255,255,0.05) !important;
-            backdrop-filter: saturate(220%) blur(40px) brightness(1.10) !important;
-            -webkit-backdrop-filter: saturate(220%) blur(40px) brightness(1.10) !important;
+            backdrop-filter: saturate(180%) blur(40px) brightness(1.06) !important;
+            -webkit-backdrop-filter: saturate(180%) blur(40px) brightness(1.06) !important;
             border: 1px solid rgba(255,255,255,0.16) !important;
             border-top: 1px solid rgba(255,255,255,0.30) !important;
             border-left: 1px solid rgba(255,255,255,0.18) !important;
@@ -1043,7 +1043,7 @@ def inject_styles(theme_name: str = "dark") -> None:
             box-shadow:
                 0 4px 24px rgba(0,0,0,0.16),
                 0 1px 0 rgba(255,255,255,0.08) inset,
-                0 12px 40px rgba(0,200,255,0.10) !important;
+                0 12px 40px rgba(0,150,200,0.07) !important;
             animation: iosBounceLeft 0.4s cubic-bezier(0.34,1.56,0.64,1) !important;
         }}
 
