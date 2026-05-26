@@ -24,7 +24,6 @@ import pytz
 import streamlit as st
 from dotenv import load_dotenv
 from groq import Groq, RateLimitError, APIConnectionError
-from streamlit_mic_recorder import mic_recorder
 
 load_dotenv()
 
@@ -839,24 +838,6 @@ def detect_intent(user_input: str) -> Optional[Intent]:
 # ── LLM ────────────────────────────────────────────────────────────────────────
 _groq_client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
 
-def transcribe_audio(audio_bytes: bytes) -> str | None:
-    if not _groq_client or not audio_bytes:
-        return None
-    try:
-        import io
-        audio_file = io.BytesIO(audio_bytes)
-        audio_file.name = "voice.wav"
-        transcription = _groq_client.audio.transcriptions.create(
-            file=audio_file,
-            model="whisper-large-v3",
-            response_format="text",
-        )
-        logger.info(f"Voice transcribed: {str(transcription)[:80]}")
-        return str(transcription).strip()
-    except Exception as exc:
-        logger.error(f"Transcription error: {exc}")
-        return None
-
 def _build_system_prompt() -> str:
     current_time = datetime.now(IST).strftime("%A, %d %B %Y, %I:%M %p")
     return SYSTEM_PROMPT_TEMPLATE.format(current_time=current_time)
@@ -1213,33 +1194,6 @@ def inject_styles(theme_name: str = "dark") -> None:
             border-radius: 3px;
         }}
 
-        /* ── Mic recorder button styling ── */
-        div[data-testid="stAudio"] {{ display: none !important; }}
-        .mic-wrapper button {{
-            background: linear-gradient(135deg, {t['accent']} 0%, {t['accent2']} 100%) !important;
-            border: none !important;
-            border-radius: 50% !important;
-            width: 48px !important;
-            height: 48px !important;
-            font-size: 20px !important;
-            box-shadow: 0 4px 20px {t['accent']}55, inset 0 1px 0 rgba(255,255,255,0.25) !important;
-            transition: transform 0.2s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.2s ease !important;
-            cursor: pointer !important;
-        }}
-        .mic-wrapper button:hover {{
-            transform: scale(1.12) !important;
-            box-shadow: 0 8px 28px {t['accent']}77 !important;
-        }}
-        .mic-wrapper button:active {{
-            transform: scale(0.92) !important;
-        }}
-        .mic-row {{
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 0 4px;
-        }}
-
         /* ── Header ── */
         .helix-avatar {{
             text-align: center;
@@ -1398,35 +1352,7 @@ for msg in history:
     with st.chat_message("user" if msg["role"] == "user" else "assistant"):
         st.markdown(f"**{role_label}:** {msg['content']}")
 
-# ── Voice + Text input row ──────────────────────────────────────────────────────
-if "voice_transcript" not in st.session_state:
-    st.session_state.voice_transcript = ""
-
-col_mic, col_input = st.columns([1, 11])
-
-with col_mic:
-    st.markdown("<div class='mic-wrapper'>", unsafe_allow_html=True)
-    audio = mic_recorder(
-        start_prompt="🎤",
-        stop_prompt="🔴",
-        just_once=True,
-        use_container_width=False,
-        key="mic_recorder",
-    )
-    st.markdown("</div>", unsafe_allow_html=True)
-    if audio and audio.get("bytes"):
-        transcript = transcribe_audio(audio["bytes"])
-        if transcript:
-            st.session_state.voice_transcript = transcript
-            st.rerun()
-
-with col_input:
-    user_input: str | None = st.chat_input("Speak or type, Sir...")
-
-# Check for voice transcript
-if st.session_state.voice_transcript and not user_input:
-    user_input = st.session_state.voice_transcript
-    st.session_state.voice_transcript = ""
+user_input: str | None = st.chat_input("Speak or type, Sir...")
 
 if user_input:
     logger.info(f"User input: {user_input[:100]}")
