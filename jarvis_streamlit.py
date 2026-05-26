@@ -913,7 +913,7 @@ def inject_styles(theme_name: str = "dark") -> None:
 
         /* ── Deep space background with animated orbs ── */
         .stApp {{
-            background: {t['bg']} !important;
+            background: linear-gradient(145deg, #0e1020 0%, #12162e 40%, #0a0d1f 100%) !important;
             color: {t['text']};
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
             min-height: 100vh;
@@ -929,8 +929,8 @@ def inject_styles(theme_name: str = "dark") -> None:
             left: -10%;
             width: 55%;
             height: 55%;
-            background: radial-gradient(ellipse, {t['orb1']}28 0%, transparent 70%);
-            filter: blur(60px);
+            background: radial-gradient(ellipse, rgba(180,170,255,0.22) 0%, transparent 70%);
+            filter: blur(70px);
             animation: orbFloat1 12s ease-in-out infinite;
             pointer-events: none;
             z-index: 0;
@@ -942,8 +942,8 @@ def inject_styles(theme_name: str = "dark") -> None:
             right: -10%;
             width: 50%;
             height: 50%;
-            background: radial-gradient(ellipse, {t['orb3']}20 0%, transparent 70%);
-            filter: blur(70px);
+            background: radial-gradient(ellipse, rgba(150,220,255,0.16) 0%, transparent 70%);
+            filter: blur(80px);
             animation: orbFloat2 15s ease-in-out infinite;
             pointer-events: none;
             z-index: 0;
@@ -995,37 +995,37 @@ def inject_styles(theme_name: str = "dark") -> None:
             color: {t['text2']} !important;
         }}
 
-        /* ── User bubble — iOS iMessage right-side glass ── */
+        /* ── User bubble — whitish milky glass ── */
         [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) {{
-            background: {t['surface']} !important;
+            background: rgba(255,255,255,0.10) !important;
             backdrop-filter: saturate(180%) blur(30px) !important;
             -webkit-backdrop-filter: saturate(180%) blur(30px) !important;
-            border: 1px solid {t['border']} !important;
-            border-top: 1px solid rgba(255,255,255,0.18) !important;
+            border: 1px solid rgba(255,255,255,0.20) !important;
+            border-top: 1px solid rgba(255,255,255,0.30) !important;
             border-radius: 22px 6px 22px 22px !important;
             padding: 14px 18px !important;
             margin: 8px 0 8px 50px !important;
             box-shadow:
-                0 2px 6px rgba(0,0,0,0.12),
-                0 12px 40px {t['user_glow']},
-                inset 0 1px 0 rgba(255,255,255,0.12) !important;
+                0 2px 6px rgba(0,0,0,0.18),
+                0 12px 40px rgba(123,127,255,0.14),
+                inset 0 1px 0 rgba(255,255,255,0.22) !important;
             animation: iosBounceRight 0.4s cubic-bezier(0.34,1.56,0.64,1) !important;
         }}
 
-        /* ── HELIX bubble — iOS iMessage left-side glass ── */
+        /* ── HELIX bubble — whitish milky glass ── */
         [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"]) {{
-            background: {t['surface']} !important;
+            background: rgba(255,255,255,0.07) !important;
             backdrop-filter: saturate(180%) blur(30px) !important;
             -webkit-backdrop-filter: saturate(180%) blur(30px) !important;
-            border: 1px solid {t['border']} !important;
-            border-top: 1px solid rgba(255,255,255,0.12) !important;
+            border: 1px solid rgba(255,255,255,0.14) !important;
+            border-top: 1px solid rgba(255,255,255,0.22) !important;
             border-radius: 6px 22px 22px 22px !important;
             padding: 14px 18px !important;
             margin: 8px 50px 8px 0 !important;
             box-shadow:
-                0 2px 6px rgba(0,0,0,0.10),
-                0 12px 40px {t['ai_glow']},
-                inset 0 1px 0 rgba(255,255,255,0.08) !important;
+                0 2px 6px rgba(0,0,0,0.14),
+                0 12px 40px rgba(251,191,36,0.08),
+                inset 0 1px 0 rgba(255,255,255,0.16) !important;
             animation: iosBounceLeft 0.4s cubic-bezier(0.34,1.56,0.64,1) !important;
         }}
 
@@ -1051,7 +1051,7 @@ def inject_styles(theme_name: str = "dark") -> None:
 
         /* ── iOS Liquid Glass Input Bar ── */
         [data-testid="stBottom"] {{
-            background: linear-gradient(to top, {t['bg']} 55%, transparent 100%) !important;
+            background: linear-gradient(to top, #0e1020 55%, transparent 100%) !important;
             padding: 12px 0 28px 0 !important;
             backdrop-filter: blur(0px) !important;
             position: relative;
