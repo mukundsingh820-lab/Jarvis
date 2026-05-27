@@ -1036,8 +1036,8 @@ def inject_styles(theme_name: str = "dark") -> None:
                 0 4px 24px rgba(0,0,0,0.20),
                 0 1px 0 rgba(255,255,255,0.10) inset,
                 0 12px 40px rgba(100,80,200,0.08),
-                0 0 0 1px rgba(255,255,255,0.18),
-                0 2px 16px rgba(255,255,255,0.07) !important;
+                0 0 0 1px rgba(255,255,255,0.32),
+                0 2px 16px rgba(255,255,255,0.12) !important;
             animation: iosBounceRight 0.4s cubic-bezier(0.34,1.56,0.64,1) !important;
         }}
 
@@ -1057,8 +1057,8 @@ def inject_styles(theme_name: str = "dark") -> None:
                 0 4px 24px rgba(0,0,0,0.16),
                 0 1px 0 rgba(255,255,255,0.08) inset,
                 0 12px 40px rgba(0,150,200,0.07),
-                0 0 0 1px rgba(255,255,255,0.14),
-                0 2px 16px rgba(255,255,255,0.05) !important;
+                0 0 0 1px rgba(255,255,255,0.26),
+                0 2px 16px rgba(255,255,255,0.09) !important;
             animation: iosBounceLeft 0.4s cubic-bezier(0.34,1.56,0.64,1) !important;
         }}
 
