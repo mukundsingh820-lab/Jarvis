@@ -769,6 +769,14 @@ _CURRENT_EVENTS = re.compile(
     r"this year|this month)\b",
     re.IGNORECASE,
 )
+# ── NEW: Local entity pattern (schools, hospitals, places, etc.) ───────────────
+_LOCAL_ENTITY = re.compile(
+    r"\b(school|college|university|hospital|institute|academy|"
+    r"temple|church|mosque|library|clinic|company|firm|"
+    r"organisation|organization|restaurant|shop|store|hotel|"
+    r"centre|center|stadium|park|museum|mall)\b",
+    re.IGNORECASE,
+)
 
 def _score_calculator(text: str) -> tuple[float, dict]:
     if _CALC_EXPLICIT.search(text):
@@ -809,6 +817,9 @@ def _score_search(text: str) -> tuple[float, dict]:
         return 0.90, {"query": query or text}
     if _CURRENT_EVENTS.search(text):
         return 0.75, {"query": text}
+    # ── NEW: Trigger web search for local entity queries ──────────────────────
+    if _LOCAL_ENTITY.search(text):
+        return 0.80, {"query": text}
     return 0.0, {}
 
 def detect_intent(user_input: str) -> Optional[Intent]:
