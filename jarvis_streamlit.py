@@ -1459,10 +1459,13 @@ if user_input:
                 context_with_search = list(context) + [{
                     "role": "user",
                     "content": (
-                        f"Use this web search data to help answer: '{user_input}'\n\n"
+                        f"Use this web search data to answer: '{user_input}'\n\n"
                         f"Search data:\n{search_context}\n\n"
-                        f"If the search data is relevant, use it. "
-                        f"If not, answer from your own knowledge. Be concise, Sir."
+                        f"IMPORTANT RULES:\n"
+                        f"- For any numbers, stats, or figures: use ONLY what is explicitly stated in the search data above. Do NOT guess or use memory.\n"
+                        f"- If the search data mentions a number, quote it exactly and mention the source.\n"
+                        f"- If search data is unclear or missing, say 'I couldn't confirm the exact figure, Sir' rather than guessing.\n"
+                        f"- Be concise, Sir."
                     ),
                 }]
                 response = stream_response(context_with_search, container=response_container)
