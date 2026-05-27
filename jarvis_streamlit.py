@@ -1444,27 +1444,26 @@ if user_input:
         if response is None:
             context = load_recent(limit=LLM_CONTEXT_LIMIT)
             response_container = st.empty()
-            response = stream_response(context, container=response_container)
-
-            if _needs_web_search(response):
-                logger.info("Auto web-search triggered by LLM uncertainty")
-                with st.spinner("🔎 Searching the web…"):
-                    search = web_search(user_input)
-                if search.success:
-                    search_context = "\n".join(
-                        r.clean_snippet(200) for r in search.results[:3]
-                    )
-                    context_with_response = list(context) + [
-                        {"role": "assistant", "content": response},
-                        {
-                            "role": "user",
-                            "content": (
-                                f"Based on this search data, answer in 1-2 SHORT sentences only.\n\n"
-                                f"Search data:\n{search_context}"
-                            ),
-                        },
-                    ]
-                    response = stream_response(context_with_response, container=response_container)
+            # Always search the web first so HELIX can answer any question
+            logger.info("Always-on web search triggered for general query")
+            with st.spinner("🔎 Searching the web…"):
+                search = web_search(user_input)
+            if search.success:
+                search_context = "\n".join(
+                    r.clean_snippet(200) for r in search.results[:3]
+                )
+                context_with_search = list(context) + [{
+                    "role": "user",
+                    "content": (
+                        f"Use this web search data to help answer: '{user_input}'\n\n"
+                        f"Search data:\n{search_context}\n\n"
+                        f"If the search data is relevant, use it. "
+                        f"If not, answer from your own knowledge. Be concise, Sir."
+                    ),
+                }]
+                response = stream_response(context_with_search, container=response_container)
+            else:
+                response = stream_response(context, container=response_container)
 
         if response:
             append_message("assistant", response)
