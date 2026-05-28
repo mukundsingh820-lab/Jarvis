@@ -1036,73 +1036,92 @@ def inject_styles(theme_name: str = "dark") -> None:
         /* ── iOS 26 Liquid Glass — User bubble ── */
         [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) {{
             background: linear-gradient(
-                135deg,
-                rgba(255,255,255,0.11) 0%,
-                rgba(255,255,255,0.06) 100%
+                145deg,
+                rgba(255,255,255,0.20) 0%,
+                rgba(255,255,255,0.07) 50%,
+                rgba(255,255,255,0.13) 100%
             ) !important;
-            backdrop-filter: saturate(250%) blur(50px) brightness(1.18) contrast(1.05) !important;
-            -webkit-backdrop-filter: saturate(250%) blur(50px) brightness(1.18) contrast(1.05) !important;
-            border: 1px solid rgba(255,255,255,0.28) !important;
-            border-top: 1px solid rgba(255,255,255,0.50) !important;
-            border-left: 1px solid rgba(255,255,255,0.18) !important;
+            backdrop-filter: saturate(320%) blur(90px) brightness(1.30) contrast(1.10) !important;
+            -webkit-backdrop-filter: saturate(320%) blur(90px) brightness(1.30) contrast(1.10) !important;
+            border: 1px solid rgba(255,255,255,0.38) !important;
+            border-top: 1px solid rgba(255,255,255,0.70) !important;
+            border-left: 1px solid rgba(255,255,255,0.24) !important;
             border-bottom: 1px solid rgba(255,255,255,0.06) !important;
-            border-right: 1px solid rgba(255,255,255,0.08) !important;
+            border-right: 1px solid rgba(255,255,255,0.10) !important;
             border-radius: 24px 6px 24px 24px !important;
-            padding: 14px 18px !important;
+            padding: 14px 20px !important;
             margin: 10px 0 10px 48px !important;
             box-shadow:
-                0 2px 0 rgba(255,255,255,0.22) inset,
-                0 8px 32px rgba(0,0,0,0.28),
-                0 2px 8px rgba(0,0,0,0.18),
-                0 0 0 1px rgba(255,255,255,0.32),
-                0 20px 60px rgba(100,70,255,0.10) !important;
+                0 1px 0 rgba(255,255,255,0.65) inset,
+                0 -1px 0 rgba(255,255,255,0.08) inset,
+                0 8px 40px rgba(0,0,0,0.34),
+                0 2px 8px rgba(0,0,0,0.22),
+                0 0 0 1px rgba(255,255,255,0.45),
+                0 24px 80px rgba(110,70,255,0.18) !important;
             animation: liquidBounceRight 0.5s cubic-bezier(0.34,1.56,0.64,1) both !important;
             position: relative;
         }}
-        /* Specular highlight — top edge gleam */
         [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"])::before {{
             content: '';
             position: absolute;
-            top: 0; left: 10%; right: 30%;
+            top: 1px; left: 8%; right: 25%;
             height: 1px;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.70), transparent);
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.95), rgba(255,255,255,0.65), transparent);
             border-radius: 50%;
+            pointer-events: none;
+        }}
+        [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"])::after {{
+            content: '';
+            position: absolute;
+            bottom: 4px; left: 20%; right: 20%;
+            height: 14px;
+            background: radial-gradient(ellipse, rgba(255,255,255,0.10) 0%, transparent 80%);
             pointer-events: none;
         }}
 
         /* ── iOS 26 Liquid Glass — HELIX bubble ── */
         [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"]) {{
             background: linear-gradient(
-                135deg,
-                rgba(255,255,255,0.07) 0%,
-                rgba(255,255,255,0.03) 100%
+                145deg,
+                rgba(255,255,255,0.15) 0%,
+                rgba(255,255,255,0.05) 50%,
+                rgba(255,255,255,0.10) 100%
             ) !important;
-            backdrop-filter: saturate(200%) blur(50px) brightness(1.10) contrast(1.02) !important;
-            -webkit-backdrop-filter: saturate(200%) blur(50px) brightness(1.10) contrast(1.02) !important;
-            border: 1px solid rgba(255,255,255,0.20) !important;
-            border-top: 1px solid rgba(255,255,255,0.42) !important;
-            border-left: 1px solid rgba(255,255,255,0.22) !important;
-            border-bottom: 1px solid rgba(255,255,255,0.04) !important;
-            border-right: 1px solid rgba(255,255,255,0.06) !important;
+            backdrop-filter: saturate(300%) blur(90px) brightness(1.22) contrast(1.08) !important;
+            -webkit-backdrop-filter: saturate(300%) blur(90px) brightness(1.22) contrast(1.08) !important;
+            border: 1px solid rgba(255,255,255,0.30) !important;
+            border-top: 1px solid rgba(255,255,255,0.62) !important;
+            border-left: 1px solid rgba(255,255,255,0.30) !important;
+            border-bottom: 1px solid rgba(255,255,255,0.05) !important;
+            border-right: 1px solid rgba(255,255,255,0.08) !important;
             border-radius: 6px 24px 24px 24px !important;
-            padding: 14px 18px !important;
+            padding: 14px 20px !important;
             margin: 10px 48px 10px 0 !important;
             box-shadow:
-                0 2px 0 rgba(255,255,255,0.14) inset,
-                0 8px 32px rgba(0,0,0,0.22),
-                0 2px 8px rgba(0,0,0,0.14),
-                0 0 0 1px rgba(255,255,255,0.24),
-                0 20px 60px rgba(0,140,220,0.08) !important;
+                0 1px 0 rgba(255,255,255,0.50) inset,
+                0 -1px 0 rgba(255,255,255,0.05) inset,
+                0 8px 40px rgba(0,0,0,0.28),
+                0 2px 8px rgba(0,0,0,0.18),
+                0 0 0 1px rgba(255,255,255,0.36),
+                0 24px 80px rgba(0,140,220,0.12) !important;
             animation: liquidBounceLeft 0.5s cubic-bezier(0.34,1.56,0.64,1) both !important;
             position: relative;
         }}
         [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"])::before {{
             content: '';
             position: absolute;
-            top: 0; left: 20%; right: 15%;
+            top: 1px; left: 18%; right: 12%;
             height: 1px;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.55), transparent);
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.88), rgba(255,255,255,0.55), transparent);
             border-radius: 50%;
+            pointer-events: none;
+        }}
+        [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"])::after {{
+            content: '';
+            position: absolute;
+            bottom: 4px; left: 20%; right: 20%;
+            height: 14px;
+            background: radial-gradient(ellipse, rgba(255,255,255,0.07) 0%, transparent 80%);
             pointer-events: none;
         }}
 
@@ -1140,21 +1159,22 @@ def inject_styles(theme_name: str = "dark") -> None:
         }}
         [data-testid="stChatInputContainer"] {{
             background: linear-gradient(
-                135deg,
-                rgba(255,255,255,0.10) 0%,
-                rgba(255,255,255,0.05) 100%
+                145deg,
+                rgba(255,255,255,0.16) 0%,
+                rgba(255,255,255,0.07) 60%,
+                rgba(255,255,255,0.12) 100%
             ) !important;
-            backdrop-filter: saturate(220%) blur(60px) brightness(1.12) !important;
-            -webkit-backdrop-filter: saturate(220%) blur(60px) brightness(1.12) !important;
-            border: 1px solid rgba(255,255,255,0.22) !important;
-            border-top: 1px solid rgba(255,255,255,0.45) !important;
+            backdrop-filter: saturate(300%) blur(90px) brightness(1.20) !important;
+            -webkit-backdrop-filter: saturate(300%) blur(90px) brightness(1.20) !important;
+            border: 1px solid rgba(255,255,255,0.32) !important;
+            border-top: 1px solid rgba(255,255,255,0.60) !important;
             border-radius: 32px !important;
             padding: 5px 6px 5px 22px !important;
             box-shadow:
-                0 2px 0 rgba(255,255,255,0.18) inset,
-                0 8px 32px rgba(0,0,0,0.24),
-                0 32px 80px rgba(0,0,0,0.20),
-                0 0 0 1px rgba(255,255,255,0.18) !important;
+                0 1px 0 rgba(255,255,255,0.55) inset,
+                0 8px 40px rgba(0,0,0,0.28),
+                0 32px 80px rgba(0,0,0,0.22),
+                0 0 0 1px rgba(255,255,255,0.28) !important;
             transition: all 0.35s cubic-bezier(0.34,1.2,0.64,1) !important;
         }}
         [data-testid="stChatInputContainer"]:focus-within {{
@@ -1300,14 +1320,15 @@ def inject_styles(theme_name: str = "dark") -> None:
         .helix-glass-card {{
             display: inline-block;
             background: linear-gradient(
-                135deg,
-                rgba(255,255,255,0.10) 0%,
-                rgba(255,255,255,0.04) 100%
+                145deg,
+                rgba(255,255,255,0.18) 0%,
+                rgba(255,255,255,0.07) 50%,
+                rgba(255,255,255,0.14) 100%
             );
-            backdrop-filter: saturate(200%) blur(50px) brightness(1.10);
-            -webkit-backdrop-filter: saturate(200%) blur(50px) brightness(1.10);
-            border: 1px solid rgba(255,255,255,0.20);
-            border-top: 1px solid rgba(255,255,255,0.48);
+            backdrop-filter: saturate(300%) blur(90px) brightness(1.22);
+            -webkit-backdrop-filter: saturate(300%) blur(90px) brightness(1.22);
+            border: 1px solid rgba(255,255,255,0.30);
+            border-top: 1px solid rgba(255,255,255,0.62);
             border-radius: 32px;
             padding: 20px 48px 22px 48px;
             margin: 12px auto 0 auto;
