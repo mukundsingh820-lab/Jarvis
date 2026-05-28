@@ -915,16 +915,19 @@ def inject_styles(theme_name: str = "dark") -> None:
     t = THEMES.get(theme_name, THEMES["dark"])
     st.markdown(f"""
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=SF+Pro+Display:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
         *, *::before, *::after {{
             box-sizing: border-box;
-            transition: background 0.5s ease, color 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease, opacity 0.3s ease;
         }}
 
-        /* ── Vivid background so glass effect is visible ── */
+        /* ── iOS 26 Deep Space Background ── */
         .stApp {{
-            background: linear-gradient(145deg, #0d0f2e 0%, #10163a 50%, #0a1128 100%) !important;
+            background:
+                radial-gradient(ellipse 80% 60% at 20% 10%, rgba(120,80,255,0.28) 0%, transparent 60%),
+                radial-gradient(ellipse 60% 50% at 80% 80%, rgba(0,180,255,0.20) 0%, transparent 55%),
+                radial-gradient(ellipse 50% 40% at 60% 40%, rgba(200,60,180,0.14) 0%, transparent 50%),
+                linear-gradient(160deg, #07091a 0%, #0c0e24 40%, #080b1c 100%) !important;
             color: {t['text']};
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
             min-height: 100vh;
@@ -932,68 +935,77 @@ def inject_styles(theme_name: str = "dark") -> None:
             overflow-x: hidden;
         }}
 
-        /* Soft muted orbs — glassy but easy on eyes */
+        /* ── Animated liquid orbs ── */
         .stApp::before {{
             content: '';
             position: fixed;
-            top: -15%;
-            left: -5%;
-            width: 60%;
-            height: 60%;
-            background: radial-gradient(ellipse, rgba(100,80,200,0.22) 0%, rgba(70,50,160,0.10) 40%, transparent 70%);
-            filter: blur(80px);
-            animation: orbFloat1 12s ease-in-out infinite;
+            top: -20%;
+            left: -10%;
+            width: 65%;
+            height: 65%;
+            background: radial-gradient(ellipse,
+                rgba(110,70,255,0.30) 0%,
+                rgba(80,40,200,0.15) 35%,
+                transparent 68%);
+            filter: blur(70px);
+            animation: liquidOrb1 14s ease-in-out infinite;
             pointer-events: none;
             z-index: 0;
+            will-change: transform;
         }}
         .stApp::after {{
             content: '';
             position: fixed;
-            bottom: -10%;
-            right: -5%;
-            width: 55%;
-            height: 55%;
-            background: radial-gradient(ellipse, rgba(0,150,200,0.16) 0%, rgba(0,100,160,0.08) 40%, transparent 70%);
-            filter: blur(90px);
-            animation: orbFloat2 15s ease-in-out infinite;
+            bottom: -15%;
+            right: -8%;
+            width: 58%;
+            height: 58%;
+            background: radial-gradient(ellipse,
+                rgba(0,170,240,0.22) 0%,
+                rgba(0,110,200,0.10) 40%,
+                transparent 68%);
+            filter: blur(80px);
+            animation: liquidOrb2 18s ease-in-out infinite;
             pointer-events: none;
             z-index: 0;
+            will-change: transform;
         }}
-        @keyframes orbFloat1 {{
-            0%,100% {{ transform: translate(0,0) scale(1); }}
-            33%      {{ transform: translate(5%,8%) scale(1.08); }}
-            66%      {{ transform: translate(-3%,4%) scale(0.95); }}
+        @keyframes liquidOrb1 {{
+            0%,100% {{ transform: translate(0,0) scale(1) rotate(0deg); }}
+            25%      {{ transform: translate(6%,10%) scale(1.12) rotate(5deg); }}
+            50%      {{ transform: translate(2%,5%) scale(0.96) rotate(-3deg); }}
+            75%      {{ transform: translate(-4%,8%) scale(1.06) rotate(2deg); }}
         }}
-        @keyframes orbFloat2 {{
-            0%,100% {{ transform: translate(0,0) scale(1); }}
-            33%      {{ transform: translate(-6%,-5%) scale(1.1); }}
-            66%      {{ transform: translate(4%,-8%) scale(0.92); }}
+        @keyframes liquidOrb2 {{
+            0%,100% {{ transform: translate(0,0) scale(1) rotate(0deg); }}
+            30%      {{ transform: translate(-7%,-6%) scale(1.15) rotate(-4deg); }}
+            60%      {{ transform: translate(5%,-10%) scale(0.93) rotate(6deg); }}
         }}
 
         .main .block-container {{
-            max-width: 800px;
+            max-width: 820px;
             padding-top: 0 !important;
-            padding-bottom: 130px !important;
+            padding-bottom: 140px !important;
             position: relative;
             z-index: 1;
         }}
-        /* Third orb — soft muted rose in center */
+        /* Rose orb center */
         .main .block-container::before {{
             content: '';
             position: fixed;
-            top: 30%;
-            left: 20%;
-            width: 40%;
-            height: 40%;
-            background: radial-gradient(ellipse, rgba(180,60,140,0.10) 0%, transparent 70%);
-            filter: blur(90px);
-            animation: orbFloat1 18s ease-in-out infinite reverse;
+            top: 35%;
+            left: 25%;
+            width: 45%;
+            height: 45%;
+            background: radial-gradient(ellipse, rgba(200,50,160,0.12) 0%, transparent 65%);
+            filter: blur(100px);
+            animation: liquidOrb1 22s ease-in-out infinite reverse;
             pointer-events: none;
             z-index: 0;
         }}
 
         @media (max-width: 768px) {{
-            .main .block-container {{ padding: 4px 8px 130px 8px !important; }}
+            .main .block-container {{ padding: 4px 8px 140px 8px !important; }}
         }}
 
         h1, h2, h3 {{
@@ -1001,12 +1013,13 @@ def inject_styles(theme_name: str = "dark") -> None:
             color: {t['accent']};
         }}
 
-        /* ── iOS Glass Sidebar ── */
+        /* ── iOS 26 Liquid Glass Sidebar ── */
         [data-testid="stSidebar"] {{
-            background: {t['surface']} !important;
-            backdrop-filter: saturate(180%) blur(40px) !important;
-            -webkit-backdrop-filter: saturate(180%) blur(40px) !important;
-            border-right: 1px solid {t['border']} !important;
+            background: rgba(10,12,30,0.55) !important;
+            backdrop-filter: saturate(200%) blur(60px) brightness(1.08) !important;
+            -webkit-backdrop-filter: saturate(200%) blur(60px) brightness(1.08) !important;
+            border-right: 1px solid rgba(255,255,255,0.10) !important;
+            box-shadow: 4px 0 40px rgba(0,0,0,0.30) !important;
         }}
         [data-testid="stSidebar"] > div {{
             background: transparent !important;
@@ -1014,105 +1027,145 @@ def inject_styles(theme_name: str = "dark") -> None:
         [data-testid="stSidebar"] * {{ color: {t['text']} !important; }}
         [data-testid="stSidebar"] h3 {{
             font-family: 'Space Grotesk', sans-serif !important;
-            font-size: 11px !important;
-            letter-spacing: 2px !important;
+            font-size: 10px !important;
+            letter-spacing: 2.5px !important;
             text-transform: uppercase !important;
             color: {t['text2']} !important;
         }}
 
-        /* ── User bubble — true transparent glass ── */
+        /* ── iOS 26 Liquid Glass — User bubble ── */
         [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) {{
-            background: rgba(255,255,255,0.07) !important;
-            backdrop-filter: saturate(220%) blur(40px) brightness(1.15) !important;
-            -webkit-backdrop-filter: saturate(220%) blur(40px) brightness(1.15) !important;
-            border: 1px solid rgba(255,255,255,0.22) !important;
-            border-top: 1px solid rgba(255,255,255,0.38) !important;
-            border-left: 1px solid rgba(255,255,255,0.12) !important;
-            border-bottom: 1px solid rgba(255,255,255,0.06) !important;
-            border-radius: 22px 6px 22px 22px !important;
-            padding: 14px 18px !important;
-            margin: 8px 0 8px 50px !important;
-            box-shadow:
-                0 4px 24px rgba(0,0,0,0.20),
-                0 1px 0 rgba(255,255,255,0.10) inset,
-                0 12px 40px rgba(100,80,200,0.08),
-                0 0 0 1px rgba(255,255,255,0.32),
-                0 2px 16px rgba(255,255,255,0.12) !important;
-            animation: iosBounceRight 0.4s cubic-bezier(0.34,1.56,0.64,1) !important;
-        }}
-
-        /* ── HELIX bubble — true transparent glass ── */
-        [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"]) {{
-            background: rgba(255,255,255,0.05) !important;
-            backdrop-filter: saturate(180%) blur(40px) brightness(1.06) !important;
-            -webkit-backdrop-filter: saturate(180%) blur(40px) brightness(1.06) !important;
-            border: 1px solid rgba(255,255,255,0.16) !important;
-            border-top: 1px solid rgba(255,255,255,0.30) !important;
+            background: linear-gradient(
+                135deg,
+                rgba(255,255,255,0.11) 0%,
+                rgba(255,255,255,0.06) 100%
+            ) !important;
+            backdrop-filter: saturate(250%) blur(50px) brightness(1.18) contrast(1.05) !important;
+            -webkit-backdrop-filter: saturate(250%) blur(50px) brightness(1.18) contrast(1.05) !important;
+            border: 1px solid rgba(255,255,255,0.28) !important;
+            border-top: 1px solid rgba(255,255,255,0.50) !important;
             border-left: 1px solid rgba(255,255,255,0.18) !important;
-            border-bottom: 1px solid rgba(255,255,255,0.04) !important;
-            border-radius: 6px 22px 22px 22px !important;
+            border-bottom: 1px solid rgba(255,255,255,0.06) !important;
+            border-right: 1px solid rgba(255,255,255,0.08) !important;
+            border-radius: 24px 6px 24px 24px !important;
             padding: 14px 18px !important;
-            margin: 8px 50px 8px 0 !important;
+            margin: 10px 0 10px 48px !important;
             box-shadow:
-                0 4px 24px rgba(0,0,0,0.16),
-                0 1px 0 rgba(255,255,255,0.08) inset,
-                0 12px 40px rgba(0,150,200,0.07),
-                0 0 0 1px rgba(255,255,255,0.26),
-                0 2px 16px rgba(255,255,255,0.09) !important;
-            animation: iosBounceLeft 0.4s cubic-bezier(0.34,1.56,0.64,1) !important;
+                0 2px 0 rgba(255,255,255,0.22) inset,
+                0 8px 32px rgba(0,0,0,0.28),
+                0 2px 8px rgba(0,0,0,0.18),
+                0 0 0 1px rgba(255,255,255,0.32),
+                0 20px 60px rgba(100,70,255,0.10) !important;
+            animation: liquidBounceRight 0.5s cubic-bezier(0.34,1.56,0.64,1) both !important;
+            position: relative;
+        }}
+        /* Specular highlight — top edge gleam */
+        [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"])::before {{
+            content: '';
+            position: absolute;
+            top: 0; left: 10%; right: 30%;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.70), transparent);
+            border-radius: 50%;
+            pointer-events: none;
         }}
 
-        @keyframes iosBounceRight {{
-            0%   {{ opacity: 0; transform: translateX(28px) scale(0.92); }}
-            60%  {{ opacity: 1; transform: translateX(-4px) scale(1.01); }}
-            100% {{ opacity: 1; transform: translateX(0) scale(1); }}
+        /* ── iOS 26 Liquid Glass — HELIX bubble ── */
+        [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"]) {{
+            background: linear-gradient(
+                135deg,
+                rgba(255,255,255,0.07) 0%,
+                rgba(255,255,255,0.03) 100%
+            ) !important;
+            backdrop-filter: saturate(200%) blur(50px) brightness(1.10) contrast(1.02) !important;
+            -webkit-backdrop-filter: saturate(200%) blur(50px) brightness(1.10) contrast(1.02) !important;
+            border: 1px solid rgba(255,255,255,0.20) !important;
+            border-top: 1px solid rgba(255,255,255,0.42) !important;
+            border-left: 1px solid rgba(255,255,255,0.22) !important;
+            border-bottom: 1px solid rgba(255,255,255,0.04) !important;
+            border-right: 1px solid rgba(255,255,255,0.06) !important;
+            border-radius: 6px 24px 24px 24px !important;
+            padding: 14px 18px !important;
+            margin: 10px 48px 10px 0 !important;
+            box-shadow:
+                0 2px 0 rgba(255,255,255,0.14) inset,
+                0 8px 32px rgba(0,0,0,0.22),
+                0 2px 8px rgba(0,0,0,0.14),
+                0 0 0 1px rgba(255,255,255,0.24),
+                0 20px 60px rgba(0,140,220,0.08) !important;
+            animation: liquidBounceLeft 0.5s cubic-bezier(0.34,1.56,0.64,1) both !important;
+            position: relative;
         }}
-        @keyframes iosBounceLeft {{
-            0%   {{ opacity: 0; transform: translateX(-28px) scale(0.92); }}
-            60%  {{ opacity: 1; transform: translateX(4px) scale(1.01); }}
-            100% {{ opacity: 1; transform: translateX(0) scale(1); }}
+        [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"])::before {{
+            content: '';
+            position: absolute;
+            top: 0; left: 20%; right: 15%;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.55), transparent);
+            border-radius: 50%;
+            pointer-events: none;
         }}
 
-        /* ── Avatar icons inside bubbles ── */
+        /* ── Spring animations ── */
+        @keyframes liquidBounceRight {{
+            0%   {{ opacity: 0; transform: translateX(32px) scale(0.88) rotateY(-4deg); }}
+            55%  {{ opacity: 1; transform: translateX(-5px) scale(1.02) rotateY(1deg); }}
+            75%  {{ transform: translateX(2px) scale(0.995); }}
+            100% {{ opacity: 1; transform: translateX(0) scale(1) rotateY(0deg); }}
+        }}
+        @keyframes liquidBounceLeft {{
+            0%   {{ opacity: 0; transform: translateX(-32px) scale(0.88) rotateY(4deg); }}
+            55%  {{ opacity: 1; transform: translateX(5px) scale(1.02) rotateY(-1deg); }}
+            75%  {{ transform: translateX(-2px) scale(0.995); }}
+            100% {{ opacity: 1; transform: translateX(0) scale(1) rotateY(0deg); }}
+        }}
+
+        /* ── Avatars ── */
         [data-testid="stChatMessageAvatarUser"],
         [data-testid="stChatMessageAvatarAssistant"] {{
-            background: {t['surface']} !important;
-            backdrop-filter: blur(20px) !important;
-            border: 1px solid {t['border']} !important;
-            box-shadow: 0 4px 16px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.15) !important;
+            background: rgba(255,255,255,0.08) !important;
+            backdrop-filter: blur(30px) !important;
+            border: 1px solid rgba(255,255,255,0.22) !important;
+            box-shadow:
+                0 4px 20px rgba(0,0,0,0.20),
+                inset 0 1px 0 rgba(255,255,255,0.25) !important;
         }}
 
-        /* ── iOS Liquid Glass Input Bar ── */
+        /* ── iOS 26 Liquid Glass Input Bar ── */
         [data-testid="stBottom"] {{
-            background: linear-gradient(to top, #0e1020 55%, transparent 100%) !important;
-            padding: 12px 0 28px 0 !important;
-            backdrop-filter: blur(0px) !important;
+            background: linear-gradient(to top, rgba(6,8,20,0.96) 50%, transparent 100%) !important;
+            padding: 14px 0 30px 0 !important;
             position: relative;
             z-index: 10;
         }}
         [data-testid="stChatInputContainer"] {{
-            background: {t['surface']} !important;
-            backdrop-filter: saturate(200%) blur(40px) !important;
-            -webkit-backdrop-filter: saturate(200%) blur(40px) !important;
-            border: 1px solid {t['border']} !important;
-            border-top: 1px solid rgba(255,255,255,0.20) !important;
-            border-radius: 30px !important;
-            padding: 5px 6px 5px 20px !important;
+            background: linear-gradient(
+                135deg,
+                rgba(255,255,255,0.10) 0%,
+                rgba(255,255,255,0.05) 100%
+            ) !important;
+            backdrop-filter: saturate(220%) blur(60px) brightness(1.12) !important;
+            -webkit-backdrop-filter: saturate(220%) blur(60px) brightness(1.12) !important;
+            border: 1px solid rgba(255,255,255,0.22) !important;
+            border-top: 1px solid rgba(255,255,255,0.45) !important;
+            border-radius: 32px !important;
+            padding: 5px 6px 5px 22px !important;
             box-shadow:
-                0 2px 8px rgba(0,0,0,0.15),
-                0 20px 60px rgba(0,0,0,0.20),
-                inset 0 1px 0 rgba(255,255,255,0.15),
-                inset 0 -1px 0 rgba(0,0,0,0.06) !important;
-            transition: border-color 0.3s ease, box-shadow 0.3s ease !important;
+                0 2px 0 rgba(255,255,255,0.18) inset,
+                0 8px 32px rgba(0,0,0,0.24),
+                0 32px 80px rgba(0,0,0,0.20),
+                0 0 0 1px rgba(255,255,255,0.18) !important;
+            transition: all 0.35s cubic-bezier(0.34,1.2,0.64,1) !important;
         }}
         [data-testid="stChatInputContainer"]:focus-within {{
-            border-color: {t['accent']}66 !important;
+            border-color: rgba(255,255,255,0.38) !important;
             box-shadow:
-                0 2px 8px rgba(0,0,0,0.15),
-                0 20px 60px rgba(0,0,0,0.25),
-                0 0 0 3px {t['accent']}18,
-                inset 0 1px 0 rgba(255,255,255,0.18),
-                inset 0 -1px 0 rgba(0,0,0,0.06) !important;
+                0 2px 0 rgba(255,255,255,0.22) inset,
+                0 8px 32px rgba(0,0,0,0.28),
+                0 32px 80px rgba(0,0,0,0.22),
+                0 0 0 1px rgba(255,255,255,0.28),
+                0 0 40px {t['accent']}22 !important;
+            transform: translateY(-1px) !important;
         }}
         [data-testid="stChatInputContainer"] textarea {{
             background: transparent !important;
@@ -1120,41 +1173,40 @@ def inject_styles(theme_name: str = "dark") -> None:
             font-family: 'Inter', -apple-system, sans-serif !important;
             font-size: 15px !important;
             font-weight: 400 !important;
-            line-height: 1.55 !important;
+            line-height: 1.6 !important;
             border: none !important;
             outline: none !important;
             padding: 10px 4px !important;
             caret-color: {t['accent']} !important;
-            letter-spacing: 0.1px !important;
         }}
         [data-testid="stChatInputContainer"] textarea::placeholder {{
-            color: {t['text3']} !important;
+            color: rgba(255,255,255,0.28) !important;
             font-weight: 300 !important;
-            letter-spacing: 0.2px !important;
         }}
-        /* Send button — iOS circle glass */
+        /* Send button — iOS 26 glowing pill */
         [data-testid="stChatInputContainer"] button {{
             background: linear-gradient(145deg, {t['accent']} 0%, {t['accent2']} 100%) !important;
             border: none !important;
             border-radius: 50% !important;
-            width: 42px !important;
-            height: 42px !important;
-            min-width: 42px !important;
+            width: 44px !important;
+            height: 44px !important;
+            min-width: 44px !important;
             box-shadow:
-                0 4px 16px {t['accent']}55,
-                inset 0 1px 0 rgba(255,255,255,0.25) !important;
-            transition: transform 0.2s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.2s ease !important;
+                0 4px 20px {t['accent']}66,
+                0 2px 8px {t['accent']}44,
+                inset 0 1px 0 rgba(255,255,255,0.30) !important;
+            transition: transform 0.25s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.25s ease !important;
             display: flex !important;
             align-items: center !important;
             justify-content: center !important;
             margin: auto 0 !important;
         }}
         [data-testid="stChatInputContainer"] button:hover {{
-            transform: scale(1.10) !important;
-            box-shadow: 0 8px 28px {t['accent']}66, inset 0 1px 0 rgba(255,255,255,0.3) !important;
+            transform: scale(1.12) !important;
+            box-shadow: 0 8px 32px {t['accent']}88, inset 0 1px 0 rgba(255,255,255,0.35) !important;
         }}
         [data-testid="stChatInputContainer"] button:active {{
-            transform: scale(0.92) !important;
+            transform: scale(0.90) !important;
         }}
         [data-testid="stChatInputContainer"] button svg {{
             color: #fff !important;
@@ -1163,37 +1215,45 @@ def inject_styles(theme_name: str = "dark") -> None:
             height: 18px !important;
         }}
 
-        /* ── Sidebar buttons — iOS glass pill ── */
+        /* ── Sidebar buttons — liquid glass pill ── */
         .stButton button {{
-            background: {t['surface']} !important;
-            backdrop-filter: blur(20px) !important;
+            background: linear-gradient(
+                135deg,
+                rgba(255,255,255,0.10) 0%,
+                rgba(255,255,255,0.05) 100%
+            ) !important;
+            backdrop-filter: blur(30px) !important;
             color: {t['text']} !important;
-            border: 1px solid {t['border']} !important;
-            border-top: 1px solid rgba(255,255,255,0.15) !important;
-            border-radius: 14px !important;
+            border: 1px solid rgba(255,255,255,0.18) !important;
+            border-top: 1px solid rgba(255,255,255,0.32) !important;
+            border-radius: 16px !important;
             font-family: 'Inter', sans-serif !important;
             font-weight: 500 !important;
             font-size: 13px !important;
             padding: 10px 16px !important;
-            transition: all 0.25s cubic-bezier(0.34,1.56,0.64,1) !important;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.10), inset 0 1px 0 rgba(255,255,255,0.12) !important;
+            transition: all 0.28s cubic-bezier(0.34,1.56,0.64,1) !important;
+            box-shadow:
+                0 2px 0 rgba(255,255,255,0.12) inset,
+                0 4px 16px rgba(0,0,0,0.16) !important;
         }}
         .stButton button:hover {{
-            background: linear-gradient(135deg, {t['accent']}33, {t['accent2']}22) !important;
-            border-color: {t['accent']}55 !important;
-            transform: translateY(-1px) scale(1.01) !important;
-            box-shadow: 0 6px 20px {t['accent']}30, inset 0 1px 0 rgba(255,255,255,0.18) !important;
+            background: linear-gradient(135deg, {t['accent']}28, {t['accent2']}18) !important;
+            border-color: rgba(255,255,255,0.30) !important;
+            transform: translateY(-2px) scale(1.02) !important;
+            box-shadow:
+                0 2px 0 rgba(255,255,255,0.18) inset,
+                0 8px 24px {t['accent']}30 !important;
         }}
         .stButton button:active {{
-            transform: scale(0.97) !important;
+            transform: scale(0.96) translateY(0) !important;
         }}
 
         /* ── Dividers ── */
         hr {{
             border: none !important;
             height: 1px !important;
-            background: {t['border']} !important;
-            margin: 10px 0 !important;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.12), transparent) !important;
+            margin: 12px 0 !important;
         }}
 
         /* ── Spinner ── */
@@ -1201,53 +1261,82 @@ def inject_styles(theme_name: str = "dark") -> None:
             border-top-color: {t['accent']} !important;
         }}
 
-        /* ── Thin iOS scrollbar ── */
-        ::-webkit-scrollbar {{ width: 3px; }}
+        /* ── Scrollbar — ultra thin ── */
+        ::-webkit-scrollbar {{ width: 2px; }}
         ::-webkit-scrollbar-track {{ background: transparent; }}
         ::-webkit-scrollbar-thumb {{
-            background: {t['border']};
-            border-radius: 3px;
+            background: rgba(255,255,255,0.15);
+            border-radius: 2px;
         }}
 
         /* ── Header ── */
         .helix-avatar {{
             text-align: center;
-            padding: 36px 0 16px 0;
+            padding: 40px 0 20px 0;
             position: relative;
             z-index: 1;
         }}
         .helix-logo {{
-            font-size: 66px;
+            font-size: 72px;
             display: block;
-            filter: drop-shadow(0 0 18px {t['accent']}99);
-            animation: helixFloat 5s ease-in-out infinite;
+            filter: drop-shadow(0 0 24px {t['accent']}aa);
+            animation: helixFloat 6s ease-in-out infinite;
+            will-change: transform, filter;
         }}
         @keyframes helixFloat {{
-            0%,100% {{ transform: translateY(0) scale(1);    filter: drop-shadow(0 0 14px {t['accent']}77); }}
-            40%      {{ transform: translateY(-8px) scale(1.04); filter: drop-shadow(0 0 30px {t['accent']}bb); }}
-            70%      {{ transform: translateY(-4px) scale(1.02); filter: drop-shadow(0 0 20px {t['accent2']}99); }}
+            0%,100% {{
+                transform: translateY(0) scale(1);
+                filter: drop-shadow(0 0 16px {t['accent']}88);
+            }}
+            35% {{
+                transform: translateY(-10px) scale(1.05);
+                filter: drop-shadow(0 0 36px {t['accent']}cc) drop-shadow(0 0 60px {t['accent2']}55);
+            }}
+            65% {{
+                transform: translateY(-5px) scale(1.02);
+                filter: drop-shadow(0 0 22px {t['accent2']}aa);
+            }}
         }}
         .helix-glass-card {{
             display: inline-block;
-            background: {t['surface']};
-            backdrop-filter: saturate(180%) blur(30px);
-            -webkit-backdrop-filter: saturate(180%) blur(30px);
-            border: 1px solid {t['border']};
-            border-top: 1px solid rgba(255,255,255,0.18);
-            border-radius: 28px;
-            padding: 18px 40px 20px 40px;
-            margin: 10px auto 0 auto;
+            background: linear-gradient(
+                135deg,
+                rgba(255,255,255,0.10) 0%,
+                rgba(255,255,255,0.04) 100%
+            );
+            backdrop-filter: saturate(200%) blur(50px) brightness(1.10);
+            -webkit-backdrop-filter: saturate(200%) blur(50px) brightness(1.10);
+            border: 1px solid rgba(255,255,255,0.20);
+            border-top: 1px solid rgba(255,255,255,0.48);
+            border-radius: 32px;
+            padding: 20px 48px 22px 48px;
+            margin: 12px auto 0 auto;
             box-shadow:
-                0 2px 8px rgba(0,0,0,0.12),
-                0 20px 60px rgba(0,0,0,0.15),
-                inset 0 1px 0 rgba(255,255,255,0.15);
+                0 2px 0 rgba(255,255,255,0.20) inset,
+                0 8px 32px rgba(0,0,0,0.20),
+                0 40px 80px rgba(0,0,0,0.16),
+                0 0 0 1px rgba(255,255,255,0.14);
+            position: relative;
+            animation: cardEntrance 0.8s cubic-bezier(0.34,1.2,0.64,1) both;
+        }}
+        .helix-glass-card::before {{
+            content: '';
+            position: absolute;
+            top: 0; left: 15%; right: 15%;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.75), transparent);
+            border-radius: 50%;
+        }}
+        @keyframes cardEntrance {{
+            0%   {{ opacity: 0; transform: translateY(20px) scale(0.94); }}
+            100% {{ opacity: 1; transform: translateY(0) scale(1); }}
         }}
         .helix-title {{
             font-family: 'Space Grotesk', sans-serif;
-            font-size: 40px;
+            font-size: 42px;
             font-weight: 700;
-            letter-spacing: 14px;
-            background: linear-gradient(135deg, {t['accent']} 10%, {t['accent3']} 50%, {t['gold']} 90%);
+            letter-spacing: 16px;
+            background: linear-gradient(135deg, {t['accent']} 0%, {t['accent3']} 45%, {t['gold']} 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
@@ -1255,43 +1344,46 @@ def inject_styles(theme_name: str = "dark") -> None:
             line-height: 1;
         }}
         .helix-tagline {{
-            font-size: 10px;
-            color: {t['text2']};
+            font-size: 9px;
+            color: rgba(255,255,255,0.38);
             letter-spacing: 4px;
-            margin: 8px 0 0 0;
-            font-weight: 400;
+            margin: 10px 0 0 0;
+            font-weight: 300;
             text-transform: uppercase;
         }}
         .helix-divider {{
-            width: 80px;
+            width: 60px;
             height: 1px;
-            background: linear-gradient(90deg, transparent, {t['accent']}66, {t['gold']}66, transparent);
-            margin: 10px auto;
+            background: linear-gradient(90deg, transparent, {t['accent']}88, {t['gold']}66, transparent);
+            margin: 12px auto;
         }}
         .helix-dots {{
             display: flex;
             justify-content: center;
-            gap: 5px;
-            margin-top: 8px;
+            gap: 6px;
+            margin-top: 10px;
         }}
         .helix-dot {{
-            width: 4px;
-            height: 4px;
+            width: 5px;
+            height: 5px;
             border-radius: 50%;
             background: {t['accent']};
-            animation: dotPulse 2s ease-in-out infinite;
+            animation: dotBreath 2.4s ease-in-out infinite;
+            box-shadow: 0 0 8px {t['accent']}88;
         }}
         .helix-dot:nth-child(2) {{
             background: {t['accent3']};
-            animation-delay: 0.35s;
+            box-shadow: 0 0 8px {t['accent3']}88;
+            animation-delay: 0.4s;
         }}
         .helix-dot:nth-child(3) {{
             background: {t['gold']};
-            animation-delay: 0.7s;
+            box-shadow: 0 0 8px {t['gold']}88;
+            animation-delay: 0.8s;
         }}
-        @keyframes dotPulse {{
-            0%,100% {{ opacity: 0.25; transform: scale(0.7); }}
-            50%      {{ opacity: 1;   transform: scale(1.3); }}
+        @keyframes dotBreath {{
+            0%,100% {{ opacity: 0.20; transform: scale(0.65); }}
+            50%      {{ opacity: 1;   transform: scale(1.40); }}
         }}
     </style>
     """, unsafe_allow_html=True)
