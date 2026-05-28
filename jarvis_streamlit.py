@@ -1,4 +1,3 @@
-# ── Imports ────────────────────────────────────────────────────────────────────
 import ast
 import html
 import json
@@ -315,7 +314,6 @@ class SafeEvaluator(ast.NodeVisitor):
             f"Unknown name '{node.id}'. "
             f"Allowed constants: {', '.join(_SAFE_CONSTANTS)}"
         )
-
 def _normalize_expression(raw: str) -> str:
     expr = raw.strip().lower()
     expr = re.sub(r"square root of\s+(\d+\.?\d*)", r"sqrt(\1)", expr)
@@ -1381,7 +1379,7 @@ def inject_styles(theme_name: str = "dark") -> None:
             margin: 0;
             line-height: 1;
         }}
-        .helix-tagline {{
+     .helix-tagline {{
             font-size: 9px;
             color: rgba(255,255,255,0.38);
             letter-spacing: 4px;
