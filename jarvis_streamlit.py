@@ -1,3 +1,4 @@
+# ── Imports ────────────────────────────────────────────────────────────────────
 import ast
 import html
 import json
@@ -1034,7 +1035,6 @@ def inject_styles(theme_name: str = "dark") -> None:
             .helix-glass-card {{ padding: 16px 28px 18px 28px !important; border-radius: 24px !important; }}
             .helix-logo {{ font-size: 56px !important; }}
             [data-testid="stChatInputContainer"] {{ border-radius: 24px !important; }}
-            [data-testid="stSidebar"] {{ display: none !important; }}
         }}
 
         h1, h2, h3 {{
