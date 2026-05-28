@@ -917,23 +917,11 @@ def inject_styles(theme_name: str = "dark") -> None:
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
-        html {{
-            scroll-behavior: smooth;
-        }}
-
         *, *::before, *::after {{
             box-sizing: border-box;
-            transition:
-                background 0.4s cubic-bezier(0.4,0,0.2,1),
-                color 0.3s cubic-bezier(0.4,0,0.2,1),
-                border-color 0.3s cubic-bezier(0.4,0,0.2,1),
-                box-shadow 0.4s cubic-bezier(0.4,0,0.2,1),
-                opacity 0.3s cubic-bezier(0.4,0,0.2,1),
-                transform 0.3s cubic-bezier(0.4,0,0.2,1),
-                backdrop-filter 0.4s cubic-bezier(0.4,0,0.2,1);
         }}
 
-        /* ── iOS 26 Deep Space Background (always dark glass) ── */
+        /* ── iOS 26 Deep Space Background ── */
         .stApp {{
             background:
                 radial-gradient(ellipse 80% 60% at 20% 10%, rgba(120,80,255,0.28) 0%, transparent 60%),
@@ -945,9 +933,6 @@ def inject_styles(theme_name: str = "dark") -> None:
             min-height: 100vh;
             position: relative;
             overflow-x: hidden;
-            -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
-            text-rendering: optimizeLegibility;
         }}
 
         /* ── Animated liquid orbs ── */
@@ -1020,21 +1005,7 @@ def inject_styles(theme_name: str = "dark") -> None:
         }}
 
         @media (max-width: 768px) {{
-            .main .block-container {{ padding: 4px 6px 150px 6px !important; }}
-            [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) {{
-                margin: 6px 0 6px 20px !important;
-                border-radius: 18px 4px 18px 18px !important;
-                padding: 12px 14px !important;
-            }}
-            [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"]) {{
-                margin: 6px 20px 6px 0 !important;
-                border-radius: 4px 18px 18px 18px !important;
-                padding: 12px 14px !important;
-            }}
-            .helix-title {{ font-size: 30px !important; letter-spacing: 10px !important; }}
-            .helix-glass-card {{ padding: 16px 28px 18px 28px !important; border-radius: 24px !important; }}
-            .helix-logo {{ font-size: 56px !important; }}
-            [data-testid="stChatInputContainer"] {{ border-radius: 24px !important; }}
+            .main .block-container {{ padding: 4px 8px 140px 8px !important; }}
         }}
 
         h1, h2, h3 {{
@@ -1059,135 +1030,94 @@ def inject_styles(theme_name: str = "dark") -> None:
             font-size: 10px !important;
             letter-spacing: 2.5px !important;
             text-transform: uppercase !important;
-            color: rgba(255,255,255,0.35) !important;
-        }}
-        [data-testid="stSidebar"] p,
-        [data-testid="stSidebar"] .stMarkdown p {{
-            font-size: 13px !important;
-            color: rgba(255,255,255,0.75) !important;
-            line-height: 1.6 !important;
-        }}
-        [data-testid="stSidebar"] .stMarkdown strong {{
-            color: rgba(255,255,255,0.95) !important;
-        }}
-        /* Sidebar stat rows */
-        [data-testid="stSidebar"] [data-testid="stText"] {{
-            background: rgba(255,255,255,0.05) !important;
-            border: 1px solid rgba(255,255,255,0.10) !important;
-            border-top: 1px solid rgba(255,255,255,0.18) !important;
-            border-radius: 12px !important;
-            padding: 8px 12px !important;
-            margin: 3px 0 !important;
-            font-size: 13px !important;
-            backdrop-filter: blur(20px) !important;
+            color: {t['text2']} !important;
         }}
 
         /* ── iOS 26 Liquid Glass — User bubble ── */
         [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) {{
             background: linear-gradient(
-                145deg,
-                rgba(255,255,255,0.20) 0%,
-                rgba(255,255,255,0.07) 50%,
-                rgba(255,255,255,0.13) 100%
+                135deg,
+                rgba(255,255,255,0.11) 0%,
+                rgba(255,255,255,0.06) 100%
             ) !important;
-            backdrop-filter: saturate(320%) blur(90px) brightness(1.30) contrast(1.10) !important;
-            -webkit-backdrop-filter: saturate(320%) blur(90px) brightness(1.30) contrast(1.10) !important;
-            border: 1px solid rgba(255,255,255,0.38) !important;
-            border-top: 1px solid rgba(255,255,255,0.70) !important;
-            border-left: 1px solid rgba(255,255,255,0.24) !important;
+            backdrop-filter: saturate(250%) blur(50px) brightness(1.18) contrast(1.05) !important;
+            -webkit-backdrop-filter: saturate(250%) blur(50px) brightness(1.18) contrast(1.05) !important;
+            border: 1px solid rgba(255,255,255,0.28) !important;
+            border-top: 1px solid rgba(255,255,255,0.50) !important;
+            border-left: 1px solid rgba(255,255,255,0.18) !important;
             border-bottom: 1px solid rgba(255,255,255,0.06) !important;
-            border-right: 1px solid rgba(255,255,255,0.10) !important;
+            border-right: 1px solid rgba(255,255,255,0.08) !important;
             border-radius: 24px 6px 24px 24px !important;
-            padding: 14px 20px !important;
+            padding: 14px 18px !important;
             margin: 10px 0 10px 48px !important;
             box-shadow:
-                0 1px 0 rgba(255,255,255,0.65) inset,
-                0 -1px 0 rgba(255,255,255,0.08) inset,
-                0 8px 40px rgba(0,0,0,0.34),
-                0 2px 8px rgba(0,0,0,0.22),
-                0 0 0 1px rgba(255,255,255,0.45),
-                0 24px 80px rgba(110,70,255,0.18) !important;
-            animation: liquidBounceRight 0.65s cubic-bezier(0.25,0.46,0.45,0.94) both !important;
+                0 2px 0 rgba(255,255,255,0.22) inset,
+                0 8px 32px rgba(0,0,0,0.28),
+                0 2px 8px rgba(0,0,0,0.18),
+                0 0 0 1px rgba(255,255,255,0.32),
+                0 20px 60px rgba(100,70,255,0.10) !important;
+            animation: liquidBounceRight 0.5s cubic-bezier(0.34,1.56,0.64,1) both !important;
             position: relative;
         }}
+        /* Specular highlight — top edge gleam */
         [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"])::before {{
             content: '';
             position: absolute;
-            top: 1px; left: 8%; right: 25%;
+            top: 0; left: 10%; right: 30%;
             height: 1px;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.95), rgba(255,255,255,0.65), transparent);
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.70), transparent);
             border-radius: 50%;
-            pointer-events: none;
-        }}
-        [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"])::after {{
-            content: '';
-            position: absolute;
-            bottom: 4px; left: 20%; right: 20%;
-            height: 14px;
-            background: radial-gradient(ellipse, rgba(255,255,255,0.10) 0%, transparent 80%);
             pointer-events: none;
         }}
 
         /* ── iOS 26 Liquid Glass — HELIX bubble ── */
         [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"]) {{
             background: linear-gradient(
-                145deg,
-                rgba(255,255,255,0.15) 0%,
-                rgba(255,255,255,0.05) 50%,
-                rgba(255,255,255,0.10) 100%
+                135deg,
+                rgba(255,255,255,0.07) 0%,
+                rgba(255,255,255,0.03) 100%
             ) !important;
-            backdrop-filter: saturate(300%) blur(90px) brightness(1.22) contrast(1.08) !important;
-            -webkit-backdrop-filter: saturate(300%) blur(90px) brightness(1.22) contrast(1.08) !important;
-            border: 1px solid rgba(255,255,255,0.30) !important;
-            border-top: 1px solid rgba(255,255,255,0.62) !important;
-            border-left: 1px solid rgba(255,255,255,0.30) !important;
-            border-bottom: 1px solid rgba(255,255,255,0.05) !important;
-            border-right: 1px solid rgba(255,255,255,0.08) !important;
+            backdrop-filter: saturate(200%) blur(50px) brightness(1.10) contrast(1.02) !important;
+            -webkit-backdrop-filter: saturate(200%) blur(50px) brightness(1.10) contrast(1.02) !important;
+            border: 1px solid rgba(255,255,255,0.20) !important;
+            border-top: 1px solid rgba(255,255,255,0.42) !important;
+            border-left: 1px solid rgba(255,255,255,0.22) !important;
+            border-bottom: 1px solid rgba(255,255,255,0.04) !important;
+            border-right: 1px solid rgba(255,255,255,0.06) !important;
             border-radius: 6px 24px 24px 24px !important;
-            padding: 14px 20px !important;
+            padding: 14px 18px !important;
             margin: 10px 48px 10px 0 !important;
             box-shadow:
-                0 1px 0 rgba(255,255,255,0.50) inset,
-                0 -1px 0 rgba(255,255,255,0.05) inset,
-                0 8px 40px rgba(0,0,0,0.28),
-                0 2px 8px rgba(0,0,0,0.18),
-                0 0 0 1px rgba(255,255,255,0.36),
-                0 24px 80px rgba(0,140,220,0.12) !important;
-            animation: liquidBounceLeft 0.65s cubic-bezier(0.25,0.46,0.45,0.94) both !important;
+                0 2px 0 rgba(255,255,255,0.14) inset,
+                0 8px 32px rgba(0,0,0,0.22),
+                0 2px 8px rgba(0,0,0,0.14),
+                0 0 0 1px rgba(255,255,255,0.24),
+                0 20px 60px rgba(0,140,220,0.08) !important;
+            animation: liquidBounceLeft 0.5s cubic-bezier(0.34,1.56,0.64,1) both !important;
             position: relative;
         }}
         [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"])::before {{
             content: '';
             position: absolute;
-            top: 1px; left: 18%; right: 12%;
+            top: 0; left: 20%; right: 15%;
             height: 1px;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.88), rgba(255,255,255,0.55), transparent);
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.55), transparent);
             border-radius: 50%;
             pointer-events: none;
         }}
-        [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"])::after {{
-            content: '';
-            position: absolute;
-            bottom: 4px; left: 20%; right: 20%;
-            height: 14px;
-            background: radial-gradient(ellipse, rgba(255,255,255,0.07) 0%, transparent 80%);
-            pointer-events: none;
-        }}
 
-        /* ── Silky spring animations ── */
+        /* ── Spring animations ── */
         @keyframes liquidBounceRight {{
-            0%   {{ opacity: 0; transform: translateX(24px) scale(0.92) blur(4px); filter: blur(4px); }}
-            40%  {{ opacity: 1; filter: blur(0px); }}
-            65%  {{ transform: translateX(-3px) scale(1.01); }}
-            82%  {{ transform: translateX(1px) scale(0.998); }}
-            100% {{ opacity: 1; transform: translateX(0) scale(1); filter: blur(0px); }}
+            0%   {{ opacity: 0; transform: translateX(32px) scale(0.88) rotateY(-4deg); }}
+            55%  {{ opacity: 1; transform: translateX(-5px) scale(1.02) rotateY(1deg); }}
+            75%  {{ transform: translateX(2px) scale(0.995); }}
+            100% {{ opacity: 1; transform: translateX(0) scale(1) rotateY(0deg); }}
         }}
         @keyframes liquidBounceLeft {{
-            0%   {{ opacity: 0; transform: translateX(-24px) scale(0.92); filter: blur(4px); }}
-            40%  {{ opacity: 1; filter: blur(0px); }}
-            65%  {{ transform: translateX(3px) scale(1.01); }}
-            82%  {{ transform: translateX(-1px) scale(0.998); }}
-            100% {{ opacity: 1; transform: translateX(0) scale(1); filter: blur(0px); }}
+            0%   {{ opacity: 0; transform: translateX(-32px) scale(0.88) rotateY(4deg); }}
+            55%  {{ opacity: 1; transform: translateX(5px) scale(1.02) rotateY(-1deg); }}
+            75%  {{ transform: translateX(-2px) scale(0.995); }}
+            100% {{ opacity: 1; transform: translateX(0) scale(1) rotateY(0deg); }}
         }}
 
         /* ── Avatars ── */
@@ -1210,23 +1140,22 @@ def inject_styles(theme_name: str = "dark") -> None:
         }}
         [data-testid="stChatInputContainer"] {{
             background: linear-gradient(
-                145deg,
-                rgba(255,255,255,0.16) 0%,
-                rgba(255,255,255,0.07) 60%,
-                rgba(255,255,255,0.12) 100%
+                135deg,
+                rgba(255,255,255,0.10) 0%,
+                rgba(255,255,255,0.05) 100%
             ) !important;
-            backdrop-filter: saturate(300%) blur(90px) brightness(1.20) !important;
-            -webkit-backdrop-filter: saturate(300%) blur(90px) brightness(1.20) !important;
-            border: 1px solid rgba(255,255,255,0.32) !important;
-            border-top: 1px solid rgba(255,255,255,0.60) !important;
+            backdrop-filter: saturate(220%) blur(60px) brightness(1.12) !important;
+            -webkit-backdrop-filter: saturate(220%) blur(60px) brightness(1.12) !important;
+            border: 1px solid rgba(255,255,255,0.22) !important;
+            border-top: 1px solid rgba(255,255,255,0.45) !important;
             border-radius: 32px !important;
             padding: 5px 6px 5px 22px !important;
             box-shadow:
-                0 1px 0 rgba(255,255,255,0.55) inset,
-                0 8px 40px rgba(0,0,0,0.28),
-                0 32px 80px rgba(0,0,0,0.22),
-                0 0 0 1px rgba(255,255,255,0.28) !important;
-            transition: all 0.45s cubic-bezier(0.25,0.46,0.45,0.94) !important;
+                0 2px 0 rgba(255,255,255,0.18) inset,
+                0 8px 32px rgba(0,0,0,0.24),
+                0 32px 80px rgba(0,0,0,0.20),
+                0 0 0 1px rgba(255,255,255,0.18) !important;
+            transition: all 0.35s cubic-bezier(0.34,1.2,0.64,1) !important;
         }}
         [data-testid="stChatInputContainer"]:focus-within {{
             border-color: rgba(255,255,255,0.38) !important;
@@ -1302,7 +1231,7 @@ def inject_styles(theme_name: str = "dark") -> None:
             font-weight: 500 !important;
             font-size: 13px !important;
             padding: 10px 16px !important;
-            transition: all 0.38s cubic-bezier(0.25,0.46,0.45,0.94) !important;
+            transition: all 0.28s cubic-bezier(0.34,1.56,0.64,1) !important;
             box-shadow:
                 0 2px 0 rgba(255,255,255,0.12) inset,
                 0 4px 16px rgba(0,0,0,0.16) !important;
@@ -1327,103 +1256,9 @@ def inject_styles(theme_name: str = "dark") -> None:
             margin: 12px 0 !important;
         }}
 
-        /* ── Glass Spinner ── */
-        [data-testid="stSpinner"] {{
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-        }}
+        /* ── Spinner ── */
         [data-testid="stSpinner"] > div {{
-            border-color: rgba(255,255,255,0.08) !important;
             border-top-color: {t['accent']} !important;
-            border-width: 2px !important;
-            width: 20px !important;
-            height: 20px !important;
-            box-shadow: 0 0 12px {t['accent']}66 !important;
-            animation: glassSpinner 0.7s cubic-bezier(0.4,0,0.2,1) infinite !important;
-        }}
-        @keyframes glassSpinner {{
-            from {{ transform: rotate(0deg); }}
-            to   {{ transform: rotate(360deg); }}
-        }}
-
-        /* ── Markdown inside bubbles ── */
-        [data-testid="stChatMessage"] p {{
-            margin: 0 0 6px 0 !important;
-            line-height: 1.65 !important;
-            font-size: 14.5px !important;
-            color: rgba(255,255,255,0.90) !important;
-        }}
-        [data-testid="stChatMessage"] strong {{
-            color: rgba(255,255,255,1.0) !important;
-            font-weight: 600 !important;
-        }}
-        [data-testid="stChatMessage"] a {{
-            color: {t['accent3']} !important;
-            text-decoration: none !important;
-            border-bottom: 1px solid {t['accent3']}55 !important;
-            transition: border-color 0.2s ease !important;
-        }}
-        [data-testid="stChatMessage"] a:hover {{
-            border-color: {t['accent3']} !important;
-        }}
-        [data-testid="stChatMessage"] code {{
-            background: rgba(255,255,255,0.10) !important;
-            backdrop-filter: blur(10px) !important;
-            border: 1px solid rgba(255,255,255,0.15) !important;
-            border-radius: 6px !important;
-            padding: 2px 7px !important;
-            font-size: 13px !important;
-            color: {t['accent3']} !important;
-            font-family: 'SF Mono', 'Fira Code', monospace !important;
-        }}
-        [data-testid="stChatMessage"] pre {{
-            background: rgba(0,0,0,0.35) !important;
-            backdrop-filter: blur(20px) !important;
-            border: 1px solid rgba(255,255,255,0.12) !important;
-            border-top: 1px solid rgba(255,255,255,0.22) !important;
-            border-radius: 14px !important;
-            padding: 14px 16px !important;
-            overflow-x: auto !important;
-            box-shadow: 0 4px 24px rgba(0,0,0,0.24), inset 0 1px 0 rgba(255,255,255,0.10) !important;
-        }}
-        [data-testid="stChatMessage"] ul, [data-testid="stChatMessage"] ol {{
-            padding-left: 20px !important;
-            margin: 4px 0 !important;
-        }}
-        [data-testid="stChatMessage"] li {{
-            margin: 3px 0 !important;
-            line-height: 1.6 !important;
-            font-size: 14.5px !important;
-        }}
-        [data-testid="stChatMessage"] h1,
-        [data-testid="stChatMessage"] h2,
-        [data-testid="stChatMessage"] h3 {{
-            color: rgba(255,255,255,0.95) !important;
-            font-family: 'Space Grotesk', sans-serif !important;
-            margin: 8px 0 4px 0 !important;
-        }}
-
-        /* ── Typing indicator ── */
-        .helix-typing {{
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            padding: 6px 4px;
-        }}
-        .helix-typing span {{
-            width: 7px;
-            height: 7px;
-            border-radius: 50%;
-            background: rgba(255,255,255,0.55);
-            animation: typingBounce 1.2s cubic-bezier(0.4,0,0.2,1) infinite;
-            display: inline-block;
-        }}
-        .helix-typing span:nth-child(2) {{ animation-delay: 0.18s; }}
-        .helix-typing span:nth-child(3) {{ animation-delay: 0.36s; }}
-        @keyframes typingBounce {{
-            0%,60%,100% {{ transform: translateY(0);   opacity: 0.4; }}
-            30%          {{ transform: translateY(-7px); opacity: 1.0; background: {t['accent']}; }}
         }}
 
         /* ── Scrollbar — ultra thin ── */
@@ -1465,15 +1300,14 @@ def inject_styles(theme_name: str = "dark") -> None:
         .helix-glass-card {{
             display: inline-block;
             background: linear-gradient(
-                145deg,
-                rgba(255,255,255,0.18) 0%,
-                rgba(255,255,255,0.07) 50%,
-                rgba(255,255,255,0.14) 100%
+                135deg,
+                rgba(255,255,255,0.10) 0%,
+                rgba(255,255,255,0.04) 100%
             );
-            backdrop-filter: saturate(300%) blur(90px) brightness(1.22);
-            -webkit-backdrop-filter: saturate(300%) blur(90px) brightness(1.22);
-            border: 1px solid rgba(255,255,255,0.30);
-            border-top: 1px solid rgba(255,255,255,0.62);
+            backdrop-filter: saturate(200%) blur(50px) brightness(1.10);
+            -webkit-backdrop-filter: saturate(200%) blur(50px) brightness(1.10);
+            border: 1px solid rgba(255,255,255,0.20);
+            border-top: 1px solid rgba(255,255,255,0.48);
             border-radius: 32px;
             padding: 20px 48px 22px 48px;
             margin: 12px auto 0 auto;
@@ -1635,15 +1469,12 @@ if user_input:
         st.markdown(f"**👤 SIR:** {user_input}")
 
     with st.chat_message("assistant"):
-        typing_placeholder = st.empty()
-        typing_placeholder.markdown("<div class='helix-typing'><span></span><span></span><span></span></div>", unsafe_allow_html=True)
         response: str | None = None
         intent = detect_intent(user_input)
 
         if intent:
             logger.info(f"Routing to agent: {intent.type}")
 
-            typing_placeholder.empty()
             if intent.type == IntentType.CALCULATOR:
                 expr = intent.payload.get("expression", user_input)
                 result = calculate(expr)
@@ -1708,7 +1539,6 @@ if user_input:
 
         if response is None:
             context = load_recent(limit=LLM_CONTEXT_LIMIT)
-            typing_placeholder.empty()
             response_container = st.empty()
             # Always search the web first so HELIX can answer any question
             logger.info("Always-on web search triggered for general query")
