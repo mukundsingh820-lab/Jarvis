@@ -917,8 +917,20 @@ def inject_styles(theme_name: str = "dark") -> None:
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
+        html {{
+            scroll-behavior: smooth;
+        }}
+
         *, *::before, *::after {{
             box-sizing: border-box;
+            transition:
+                background 0.4s cubic-bezier(0.4,0,0.2,1),
+                color 0.3s cubic-bezier(0.4,0,0.2,1),
+                border-color 0.3s cubic-bezier(0.4,0,0.2,1),
+                box-shadow 0.4s cubic-bezier(0.4,0,0.2,1),
+                opacity 0.3s cubic-bezier(0.4,0,0.2,1),
+                transform 0.3s cubic-bezier(0.4,0,0.2,1),
+                backdrop-filter 0.4s cubic-bezier(0.4,0,0.2,1);
         }}
 
         /* ── iOS 26 Deep Space Background ── */
@@ -933,6 +945,9 @@ def inject_styles(theme_name: str = "dark") -> None:
             min-height: 100vh;
             position: relative;
             overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            text-rendering: optimizeLegibility;
         }}
 
         /* ── Animated liquid orbs ── */
@@ -1058,7 +1073,7 @@ def inject_styles(theme_name: str = "dark") -> None:
                 0 2px 8px rgba(0,0,0,0.22),
                 0 0 0 1px rgba(255,255,255,0.45),
                 0 24px 80px rgba(110,70,255,0.18) !important;
-            animation: liquidBounceRight 0.5s cubic-bezier(0.34,1.56,0.64,1) both !important;
+            animation: liquidBounceRight 0.65s cubic-bezier(0.25,0.46,0.45,0.94) both !important;
             position: relative;
         }}
         [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"])::before {{
@@ -1104,7 +1119,7 @@ def inject_styles(theme_name: str = "dark") -> None:
                 0 2px 8px rgba(0,0,0,0.18),
                 0 0 0 1px rgba(255,255,255,0.36),
                 0 24px 80px rgba(0,140,220,0.12) !important;
-            animation: liquidBounceLeft 0.5s cubic-bezier(0.34,1.56,0.64,1) both !important;
+            animation: liquidBounceLeft 0.65s cubic-bezier(0.25,0.46,0.45,0.94) both !important;
             position: relative;
         }}
         [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"])::before {{
@@ -1125,18 +1140,20 @@ def inject_styles(theme_name: str = "dark") -> None:
             pointer-events: none;
         }}
 
-        /* ── Spring animations ── */
+        /* ── Silky spring animations ── */
         @keyframes liquidBounceRight {{
-            0%   {{ opacity: 0; transform: translateX(32px) scale(0.88) rotateY(-4deg); }}
-            55%  {{ opacity: 1; transform: translateX(-5px) scale(1.02) rotateY(1deg); }}
-            75%  {{ transform: translateX(2px) scale(0.995); }}
-            100% {{ opacity: 1; transform: translateX(0) scale(1) rotateY(0deg); }}
+            0%   {{ opacity: 0; transform: translateX(24px) scale(0.92) blur(4px); filter: blur(4px); }}
+            40%  {{ opacity: 1; filter: blur(0px); }}
+            65%  {{ transform: translateX(-3px) scale(1.01); }}
+            82%  {{ transform: translateX(1px) scale(0.998); }}
+            100% {{ opacity: 1; transform: translateX(0) scale(1); filter: blur(0px); }}
         }}
         @keyframes liquidBounceLeft {{
-            0%   {{ opacity: 0; transform: translateX(-32px) scale(0.88) rotateY(4deg); }}
-            55%  {{ opacity: 1; transform: translateX(5px) scale(1.02) rotateY(-1deg); }}
-            75%  {{ transform: translateX(-2px) scale(0.995); }}
-            100% {{ opacity: 1; transform: translateX(0) scale(1) rotateY(0deg); }}
+            0%   {{ opacity: 0; transform: translateX(-24px) scale(0.92); filter: blur(4px); }}
+            40%  {{ opacity: 1; filter: blur(0px); }}
+            65%  {{ transform: translateX(3px) scale(1.01); }}
+            82%  {{ transform: translateX(-1px) scale(0.998); }}
+            100% {{ opacity: 1; transform: translateX(0) scale(1); filter: blur(0px); }}
         }}
 
         /* ── Avatars ── */
@@ -1175,7 +1192,7 @@ def inject_styles(theme_name: str = "dark") -> None:
                 0 8px 40px rgba(0,0,0,0.28),
                 0 32px 80px rgba(0,0,0,0.22),
                 0 0 0 1px rgba(255,255,255,0.28) !important;
-            transition: all 0.35s cubic-bezier(0.34,1.2,0.64,1) !important;
+            transition: all 0.45s cubic-bezier(0.25,0.46,0.45,0.94) !important;
         }}
         [data-testid="stChatInputContainer"]:focus-within {{
             border-color: rgba(255,255,255,0.38) !important;
@@ -1251,7 +1268,7 @@ def inject_styles(theme_name: str = "dark") -> None:
             font-weight: 500 !important;
             font-size: 13px !important;
             padding: 10px 16px !important;
-            transition: all 0.28s cubic-bezier(0.34,1.56,0.64,1) !important;
+            transition: all 0.38s cubic-bezier(0.25,0.46,0.45,0.94) !important;
             box-shadow:
                 0 2px 0 rgba(255,255,255,0.12) inset,
                 0 4px 16px rgba(0,0,0,0.16) !important;
