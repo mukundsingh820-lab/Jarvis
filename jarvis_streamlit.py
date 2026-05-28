@@ -314,6 +314,7 @@ class SafeEvaluator(ast.NodeVisitor):
             f"Unknown name '{node.id}'. "
             f"Allowed constants: {', '.join(_SAFE_CONSTANTS)}"
         )
+
 def _normalize_expression(raw: str) -> str:
     expr = raw.strip().lower()
     expr = re.sub(r"square root of\s+(\d+\.?\d*)", r"sqrt(\1)", expr)
@@ -931,7 +932,7 @@ def inject_styles(theme_name: str = "dark") -> None:
                 backdrop-filter 0.4s cubic-bezier(0.4,0,0.2,1);
         }}
 
-        /* ── iOS 26 Deep Space Background ── */
+        /* ── iOS 26 Deep Space Background (always dark glass) ── */
         .stApp {{
             background:
                 radial-gradient(ellipse 80% 60% at 20% 10%, rgba(120,80,255,0.28) 0%, transparent 60%),
@@ -1018,7 +1019,22 @@ def inject_styles(theme_name: str = "dark") -> None:
         }}
 
         @media (max-width: 768px) {{
-            .main .block-container {{ padding: 4px 8px 140px 8px !important; }}
+            .main .block-container {{ padding: 4px 6px 150px 6px !important; }}
+            [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) {{
+                margin: 6px 0 6px 20px !important;
+                border-radius: 18px 4px 18px 18px !important;
+                padding: 12px 14px !important;
+            }}
+            [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"]) {{
+                margin: 6px 20px 6px 0 !important;
+                border-radius: 4px 18px 18px 18px !important;
+                padding: 12px 14px !important;
+            }}
+            .helix-title {{ font-size: 30px !important; letter-spacing: 10px !important; }}
+            .helix-glass-card {{ padding: 16px 28px 18px 28px !important; border-radius: 24px !important; }}
+            .helix-logo {{ font-size: 56px !important; }}
+            [data-testid="stChatInputContainer"] {{ border-radius: 24px !important; }}
+            [data-testid="stSidebar"] {{ display: none !important; }}
         }}
 
         h1, h2, h3 {{
@@ -1043,7 +1059,27 @@ def inject_styles(theme_name: str = "dark") -> None:
             font-size: 10px !important;
             letter-spacing: 2.5px !important;
             text-transform: uppercase !important;
-            color: {t['text2']} !important;
+            color: rgba(255,255,255,0.35) !important;
+        }}
+        [data-testid="stSidebar"] p,
+        [data-testid="stSidebar"] .stMarkdown p {{
+            font-size: 13px !important;
+            color: rgba(255,255,255,0.75) !important;
+            line-height: 1.6 !important;
+        }}
+        [data-testid="stSidebar"] .stMarkdown strong {{
+            color: rgba(255,255,255,0.95) !important;
+        }}
+        /* Sidebar stat rows */
+        [data-testid="stSidebar"] [data-testid="stText"] {{
+            background: rgba(255,255,255,0.05) !important;
+            border: 1px solid rgba(255,255,255,0.10) !important;
+            border-top: 1px solid rgba(255,255,255,0.18) !important;
+            border-radius: 12px !important;
+            padding: 8px 12px !important;
+            margin: 3px 0 !important;
+            font-size: 13px !important;
+            backdrop-filter: blur(20px) !important;
         }}
 
         /* ── iOS 26 Liquid Glass — User bubble ── */
@@ -1291,9 +1327,103 @@ def inject_styles(theme_name: str = "dark") -> None:
             margin: 12px 0 !important;
         }}
 
-        /* ── Spinner ── */
+        /* ── Glass Spinner ── */
+        [data-testid="stSpinner"] {{
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+        }}
         [data-testid="stSpinner"] > div {{
+            border-color: rgba(255,255,255,0.08) !important;
             border-top-color: {t['accent']} !important;
+            border-width: 2px !important;
+            width: 20px !important;
+            height: 20px !important;
+            box-shadow: 0 0 12px {t['accent']}66 !important;
+            animation: glassSpinner 0.7s cubic-bezier(0.4,0,0.2,1) infinite !important;
+        }}
+        @keyframes glassSpinner {{
+            from {{ transform: rotate(0deg); }}
+            to   {{ transform: rotate(360deg); }}
+        }}
+
+        /* ── Markdown inside bubbles ── */
+        [data-testid="stChatMessage"] p {{
+            margin: 0 0 6px 0 !important;
+            line-height: 1.65 !important;
+            font-size: 14.5px !important;
+            color: rgba(255,255,255,0.90) !important;
+        }}
+        [data-testid="stChatMessage"] strong {{
+            color: rgba(255,255,255,1.0) !important;
+            font-weight: 600 !important;
+        }}
+        [data-testid="stChatMessage"] a {{
+            color: {t['accent3']} !important;
+            text-decoration: none !important;
+            border-bottom: 1px solid {t['accent3']}55 !important;
+            transition: border-color 0.2s ease !important;
+        }}
+        [data-testid="stChatMessage"] a:hover {{
+            border-color: {t['accent3']} !important;
+        }}
+        [data-testid="stChatMessage"] code {{
+            background: rgba(255,255,255,0.10) !important;
+            backdrop-filter: blur(10px) !important;
+            border: 1px solid rgba(255,255,255,0.15) !important;
+            border-radius: 6px !important;
+            padding: 2px 7px !important;
+            font-size: 13px !important;
+            color: {t['accent3']} !important;
+            font-family: 'SF Mono', 'Fira Code', monospace !important;
+        }}
+        [data-testid="stChatMessage"] pre {{
+            background: rgba(0,0,0,0.35) !important;
+            backdrop-filter: blur(20px) !important;
+            border: 1px solid rgba(255,255,255,0.12) !important;
+            border-top: 1px solid rgba(255,255,255,0.22) !important;
+            border-radius: 14px !important;
+            padding: 14px 16px !important;
+            overflow-x: auto !important;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.24), inset 0 1px 0 rgba(255,255,255,0.10) !important;
+        }}
+        [data-testid="stChatMessage"] ul, [data-testid="stChatMessage"] ol {{
+            padding-left: 20px !important;
+            margin: 4px 0 !important;
+        }}
+        [data-testid="stChatMessage"] li {{
+            margin: 3px 0 !important;
+            line-height: 1.6 !important;
+            font-size: 14.5px !important;
+        }}
+        [data-testid="stChatMessage"] h1,
+        [data-testid="stChatMessage"] h2,
+        [data-testid="stChatMessage"] h3 {{
+            color: rgba(255,255,255,0.95) !important;
+            font-family: 'Space Grotesk', sans-serif !important;
+            margin: 8px 0 4px 0 !important;
+        }}
+
+        /* ── Typing indicator ── */
+        .helix-typing {{
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            padding: 6px 4px;
+        }}
+        .helix-typing span {{
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.55);
+            animation: typingBounce 1.2s cubic-bezier(0.4,0,0.2,1) infinite;
+            display: inline-block;
+        }}
+        .helix-typing span:nth-child(2) {{ animation-delay: 0.18s; }}
+        .helix-typing span:nth-child(3) {{ animation-delay: 0.36s; }}
+        @keyframes typingBounce {{
+            0%,60%,100% {{ transform: translateY(0);   opacity: 0.4; }}
+            30%          {{ transform: translateY(-7px); opacity: 1.0; background: {t['accent']}; }}
         }}
 
         /* ── Scrollbar — ultra thin ── */
@@ -1379,7 +1509,7 @@ def inject_styles(theme_name: str = "dark") -> None:
             margin: 0;
             line-height: 1;
         }}
-     .helix-tagline {{
+        .helix-tagline {{
             font-size: 9px;
             color: rgba(255,255,255,0.38);
             letter-spacing: 4px;
@@ -1505,12 +1635,15 @@ if user_input:
         st.markdown(f"**👤 SIR:** {user_input}")
 
     with st.chat_message("assistant"):
+        typing_placeholder = st.empty()
+        typing_placeholder.markdown("<div class='helix-typing'><span></span><span></span><span></span></div>", unsafe_allow_html=True)
         response: str | None = None
         intent = detect_intent(user_input)
 
         if intent:
             logger.info(f"Routing to agent: {intent.type}")
 
+            typing_placeholder.empty()
             if intent.type == IntentType.CALCULATOR:
                 expr = intent.payload.get("expression", user_input)
                 result = calculate(expr)
@@ -1575,6 +1708,7 @@ if user_input:
 
         if response is None:
             context = load_recent(limit=LLM_CONTEXT_LIMIT)
+            typing_placeholder.empty()
             response_container = st.empty()
             # Always search the web first so HELIX can answer any question
             logger.info("Always-on web search triggered for general query")
