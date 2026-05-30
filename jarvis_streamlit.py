@@ -1217,36 +1217,129 @@ def inject_styles(theme_name: str = "dark") -> None:
             height: 18px !important;
         }}
 
-        .stButton button {{
-            background: linear-gradient(
-                135deg,
-                rgba(255,255,255,0.10) 0%,
-                rgba(255,255,255,0.05) 100%
-            ) !important;
-            backdrop-filter: blur(30px) !important;
-            color: {t['text']} !important;
-            border: 1px solid rgba(255,255,255,0.18) !important;
-            border-top: 1px solid rgba(255,255,255,0.32) !important;
-            border-radius: 16px !important;
-            font-family: 'Inter', sans-serif !important;
-            font-weight: 500 !important;
+        /* ══════════════════════════════════════════════════
+           LIQUID WATER BUTTON SYSTEM  (iOS 26 / inflated)
+           ══════════════════════════════════════════════════ */
+
+        /* Base pill */
+        .stButton > button {{
+            position: relative !important;
+            background:
+                linear-gradient(
+                    160deg,
+                    rgba(255,255,255,0.52) 0%,
+                    rgba(255,255,255,0.16) 26%,
+                    rgba(180,200,255,0.09) 54%,
+                    rgba(120,150,255,0.20) 100%
+                ) !important;
+            backdrop-filter: saturate(300%) blur(40px) brightness(1.22) !important;
+            -webkit-backdrop-filter: saturate(300%) blur(40px) brightness(1.22) !important;
+            border: none !important;
+            outline: none !important;
+            border-radius: 999px !important;
+            color: rgba(255,255,255,0.95) !important;
+            font-family: 'Inter', -apple-system, sans-serif !important;
+            font-weight: 600 !important;
             font-size: 13px !important;
-            padding: 10px 16px !important;
-            transition: all 0.28s cubic-bezier(0.34,1.56,0.64,1) !important;
+            letter-spacing: 0.2px !important;
+            padding: 13px 22px !important;
+            width: 100% !important;
+            cursor: pointer !important;
+            overflow: hidden !important;
+            transition:
+                transform 0.32s cubic-bezier(0.34, 1.56, 0.64, 1),
+                box-shadow 0.32s ease,
+                filter 0.22s ease !important;
+            /* ── Layered water shadows — the inflated bubble look ── */
             box-shadow:
-                0 2px 0 rgba(255,255,255,0.12) inset,
-                0 4px 16px rgba(0,0,0,0.16) !important;
+                /* fat top specular gleam */
+                0 1px 0 rgba(255,255,255,0.72) inset,
+                /* inner top highlight */
+                0 5px 16px rgba(255,255,255,0.28) inset,
+                /* bottom inner depth */
+                0 -4px 10px rgba(60,80,200,0.16) inset,
+                /* left edge shimmer */
+                -1px 0 0 rgba(255,255,255,0.38) inset,
+                /* outer glow — floats above surface */
+                0 8px 24px rgba(100,130,255,0.30),
+                0 2px 6px  rgba(100,130,255,0.22),
+                0 18px 44px rgba(100,130,255,0.12) !important;
         }}
-        .stButton button:hover {{
-            background: linear-gradient(135deg, {t['accent']}28, {t['accent2']}18) !important;
-            border-color: rgba(255,255,255,0.30) !important;
-            transform: translateY(-2px) scale(1.02) !important;
+
+        /* ── Oval specular highlight (bright eye-shaped gleam at top) ── */
+        .stButton > button::before {{
+            content: '' !important;
+            position: absolute !important;
+            top: 7px !important;
+            left: 18% !important;
+            right: 18% !important;
+            height: 34% !important;
+            background: radial-gradient(
+                ellipse at 50% 0%,
+                rgba(255,255,255,0.75) 0%,
+                rgba(255,255,255,0.25) 55%,
+                transparent 100%
+            ) !important;
+            border-radius: 50% !important;
+            pointer-events: none !important;
+            z-index: 2 !important;
+            transition: opacity 0.22s ease !important;
+        }}
+
+        /* ── Bottom liquid reflection ── */
+        .stButton > button::after {{
+            content: '' !important;
+            position: absolute !important;
+            bottom: 6px !important;
+            left: 28% !important;
+            right: 28% !important;
+            height: 18% !important;
+            background: radial-gradient(
+                ellipse at 50% 100%,
+                rgba(160,200,255,0.38) 0%,
+                transparent 80%
+            ) !important;
+            border-radius: 50% !important;
+            pointer-events: none !important;
+            z-index: 2 !important;
+        }}
+
+        /* ── Hover: rises and brightens ── */
+        .stButton > button:hover {{
+            transform: scale(1.05) translateY(-3px) !important;
+            filter: brightness(1.14) !important;
             box-shadow:
-                0 2px 0 rgba(255,255,255,0.18) inset,
-                0 8px 24px {t['accent']}30 !important;
+                0 1px 0 rgba(255,255,255,0.82) inset,
+                0 8px 22px rgba(255,255,255,0.34) inset,
+                0 -5px 14px rgba(60,80,200,0.20) inset,
+                -1px 0 0 rgba(255,255,255,0.50) inset,
+                0 14px 40px rgba(100,130,255,0.40),
+                0 4px 10px  rgba(100,130,255,0.30),
+                0 28px 64px rgba(100,130,255,0.18) !important;
         }}
-        .stButton button:active {{
-            transform: scale(0.96) translateY(0) !important;
+
+        /* ── Active: squish like a water droplet ── */
+        .stButton > button:active {{
+            transform: scale(0.93) translateY(2px) !important;
+            transition: transform 0.10s cubic-bezier(0.25,0.46,0.45,0.94) !important;
+            filter: brightness(0.96) !important;
+            box-shadow:
+                0 1px 0 rgba(255,255,255,0.50) inset,
+                0 3px 8px rgba(255,255,255,0.18) inset,
+                0 -2px 6px rgba(60,80,200,0.22) inset,
+                0 4px 12px rgba(100,130,255,0.22),
+                0 1px 3px  rgba(100,130,255,0.16) !important;
+        }}
+
+        /* ── Focus ripple ── */
+        .stButton > button:focus-visible {{
+            outline: none !important;
+            box-shadow:
+                0 1px 0 rgba(255,255,255,0.72) inset,
+                0 5px 16px rgba(255,255,255,0.28) inset,
+                0 -4px 10px rgba(60,80,200,0.16) inset,
+                0 8px 24px rgba(100,130,255,0.30),
+                0 0 0 3px rgba(140,170,255,0.55) !important;
         }}
 
         hr {{
