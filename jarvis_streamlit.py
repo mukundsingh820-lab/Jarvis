@@ -448,7 +448,6 @@ def _fetch_news_raw(url: str) -> dict:
 
 @st.cache_data(ttl=NEWS_CACHE_TTL, show_spinner=False)
 def get_news(query: str = "latest", country: str = "us") -> NewsResult:
-    # Try NewsAPI first
     if NEWS_API_KEY:
         try:
             if query.strip().lower() == "latest":
@@ -481,7 +480,6 @@ def get_news(query: str = "latest", country: str = "us") -> NewsResult:
         except Exception as exc:
             logger.warning(f"NewsAPI failed: {exc}, falling back to Tavily")
 
-    # Fallback to Tavily for news
     if TAVILY_API_KEY:
         try:
             news_query = f"latest news {query}" if query.lower() != "latest" else "latest breaking news today"
@@ -729,10 +727,11 @@ def message_count() -> int:
 
 # ── Intent Detection ───────────────────────────────────────────────────────────
 class IntentType(str, Enum):
-    CALCULATOR = "calculator"
-    WEATHER    = "weather"
-    NEWS       = "news"
-    SEARCH     = "search"
+    CALCULATOR  = "calculator"
+    WEATHER     = "weather"
+    NEWS        = "news"
+    SEARCH      = "search"
+    TIME_DATE   = "time_date"   # ← NEW: handled by LLM only, no web search
 
 @dataclass
 class Intent:
@@ -769,7 +768,6 @@ _CURRENT_EVENTS = re.compile(
     r"this year|this month)\b",
     re.IGNORECASE,
 )
-# ── NEW: Local entity pattern (schools, hospitals, places, etc.) ───────────────
 _LOCAL_ENTITY = re.compile(
     r"\b(school|college|university|hospital|institute|academy|"
     r"temple|church|mosque|library|clinic|company|firm|"
@@ -777,6 +775,21 @@ _LOCAL_ENTITY = re.compile(
     r"centre|center|stadium|park|museum|mall)\b",
     re.IGNORECASE,
 )
+
+# ── NEW: Time/date pattern — always answered by LLM from system prompt ─────────
+_TIME_DATE_QUERY = re.compile(
+    r"\b(what time|what'?s the time|current time|time now|time is it|"
+    r"what date|today'?s date|what day|what year|what month|"
+    r"tell me the time|tell me the date|date today|day today|"
+    r"which day|which date|current date|what is the time|"
+    r"what is the date|what is today)\b",
+    re.IGNORECASE,
+)
+
+def _score_time_date(text: str) -> tuple[float, dict]:
+    if _TIME_DATE_QUERY.search(text):
+        return 0.99, {}   # Highest priority — always wins
+    return 0.0, {}
 
 def _score_calculator(text: str) -> tuple[float, dict]:
     if _CALC_EXPLICIT.search(text):
@@ -817,17 +830,17 @@ def _score_search(text: str) -> tuple[float, dict]:
         return 0.90, {"query": query or text}
     if _CURRENT_EVENTS.search(text):
         return 0.75, {"query": text}
-    # ── NEW: Trigger web search for local entity queries ──────────────────────
     if _LOCAL_ENTITY.search(text):
         return 0.80, {"query": text}
     return 0.0, {}
 
 def detect_intent(user_input: str) -> Optional[Intent]:
     scorers = {
-        IntentType.CALCULATOR: _score_calculator,
-        IntentType.WEATHER:    _score_weather,
-        IntentType.NEWS:       _score_news,
-        IntentType.SEARCH:     _score_search,
+        IntentType.TIME_DATE:   _score_time_date,    # ← checked first via score
+        IntentType.CALCULATOR:  _score_calculator,
+        IntentType.WEATHER:     _score_weather,
+        IntentType.NEWS:        _score_news,
+        IntentType.SEARCH:      _score_search,
     }
     best_intent: Optional[Intent] = None
     best_score = 0.0
@@ -921,7 +934,6 @@ def inject_styles(theme_name: str = "dark") -> None:
             box-sizing: border-box;
         }}
 
-        /* ── iOS 26 Deep Space Background ── */
         .stApp {{
             background:
                 radial-gradient(ellipse 80% 60% at 20% 10%, rgba(120,80,255,0.28) 0%, transparent 60%),
@@ -935,7 +947,6 @@ def inject_styles(theme_name: str = "dark") -> None:
             overflow-x: hidden;
         }}
 
-        /* ── Animated liquid orbs ── */
         .stApp::before {{
             content: '';
             position: fixed;
@@ -989,7 +1000,6 @@ def inject_styles(theme_name: str = "dark") -> None:
             position: relative;
             z-index: 1;
         }}
-        /* Rose orb center */
         .main .block-container::before {{
             content: '';
             position: fixed;
@@ -1013,7 +1023,6 @@ def inject_styles(theme_name: str = "dark") -> None:
             color: {t['accent']};
         }}
 
-        /* ── iOS 26 Liquid Glass Sidebar ── */
         [data-testid="stSidebar"] {{
             background: rgba(10,12,30,0.55) !important;
             backdrop-filter: saturate(200%) blur(60px) brightness(1.08) !important;
@@ -1033,7 +1042,6 @@ def inject_styles(theme_name: str = "dark") -> None:
             color: {t['text2']} !important;
         }}
 
-        /* ── iOS 26 Liquid Glass — User bubble ── */
         [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) {{
             background: linear-gradient(
                 135deg,
@@ -1059,7 +1067,6 @@ def inject_styles(theme_name: str = "dark") -> None:
             animation: liquidBounceRight 0.5s cubic-bezier(0.34,1.56,0.64,1) both !important;
             position: relative;
         }}
-        /* Specular highlight — top edge gleam */
         [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"])::before {{
             content: '';
             position: absolute;
@@ -1070,7 +1077,6 @@ def inject_styles(theme_name: str = "dark") -> None:
             pointer-events: none;
         }}
 
-        /* ── iOS 26 Liquid Glass — HELIX bubble ── */
         [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"]) {{
             background: linear-gradient(
                 135deg,
@@ -1106,7 +1112,6 @@ def inject_styles(theme_name: str = "dark") -> None:
             pointer-events: none;
         }}
 
-        /* ── Spring animations ── */
         @keyframes liquidBounceRight {{
             0%   {{ opacity: 0; transform: translateX(32px) scale(0.88) rotateY(-4deg); }}
             55%  {{ opacity: 1; transform: translateX(-5px) scale(1.02) rotateY(1deg); }}
@@ -1120,7 +1125,6 @@ def inject_styles(theme_name: str = "dark") -> None:
             100% {{ opacity: 1; transform: translateX(0) scale(1) rotateY(0deg); }}
         }}
 
-        /* ── Avatars ── */
         [data-testid="stChatMessageAvatarUser"],
         [data-testid="stChatMessageAvatarAssistant"] {{
             background: rgba(255,255,255,0.08) !important;
@@ -1131,7 +1135,6 @@ def inject_styles(theme_name: str = "dark") -> None:
                 inset 0 1px 0 rgba(255,255,255,0.25) !important;
         }}
 
-        /* ── iOS 26 Liquid Glass Input Bar ── */
         [data-testid="stBottom"] {{
             background: linear-gradient(to top, rgba(6,8,20,0.96) 50%, transparent 100%) !important;
             padding: 14px 0 30px 0 !important;
@@ -1183,7 +1186,6 @@ def inject_styles(theme_name: str = "dark") -> None:
             color: rgba(255,255,255,0.28) !important;
             font-weight: 300 !important;
         }}
-        /* Send button — iOS 26 glowing pill */
         [data-testid="stChatInputContainer"] button {{
             background: linear-gradient(145deg, {t['accent']} 0%, {t['accent2']} 100%) !important;
             border: none !important;
@@ -1215,7 +1217,6 @@ def inject_styles(theme_name: str = "dark") -> None:
             height: 18px !important;
         }}
 
-        /* ── Sidebar buttons — liquid glass pill ── */
         .stButton button {{
             background: linear-gradient(
                 135deg,
@@ -1248,7 +1249,6 @@ def inject_styles(theme_name: str = "dark") -> None:
             transform: scale(0.96) translateY(0) !important;
         }}
 
-        /* ── Dividers ── */
         hr {{
             border: none !important;
             height: 1px !important;
@@ -1256,12 +1256,10 @@ def inject_styles(theme_name: str = "dark") -> None:
             margin: 12px 0 !important;
         }}
 
-        /* ── Spinner ── */
         [data-testid="stSpinner"] > div {{
             border-top-color: {t['accent']} !important;
         }}
 
-        /* ── Scrollbar — ultra thin ── */
         ::-webkit-scrollbar {{ width: 2px; }}
         ::-webkit-scrollbar-track {{ background: transparent; }}
         ::-webkit-scrollbar-thumb {{
@@ -1269,7 +1267,6 @@ def inject_styles(theme_name: str = "dark") -> None:
             border-radius: 2px;
         }}
 
-        /* ── Header ── */
         .helix-avatar {{
             text-align: center;
             padding: 40px 0 20px 0;
@@ -1475,7 +1472,14 @@ if user_input:
         if intent:
             logger.info(f"Routing to agent: {intent.type}")
 
-            if intent.type == IntentType.CALCULATOR:
+            # ── TIME/DATE: answered directly by LLM — no web search ever ──────
+            if intent.type == IntentType.TIME_DATE:
+                logger.info("Time/date query — routing directly to LLM")
+                context = load_recent(limit=LLM_CONTEXT_LIMIT)
+                response_container = st.empty()
+                response = stream_response(context, container=response_container)
+
+            elif intent.type == IntentType.CALCULATOR:
                 expr = intent.payload.get("expression", user_input)
                 result = calculate(expr)
                 if result.success:
@@ -1537,32 +1541,41 @@ if user_input:
                 else:
                     response = search.format_response(query)
 
+        # ── FALLBACK: LLM answers first; web search only if uncertain ─────────
         if response is None:
             context = load_recent(limit=LLM_CONTEXT_LIMIT)
             response_container = st.empty()
-            # Always search the web first so HELIX can answer any question
-            logger.info("Always-on web search triggered for general query")
-            with st.spinner("🔎 Searching the web…"):
-                search = web_search(user_input)
-            if search.success:
-                search_context = "\n".join(
-                    r.clean_snippet(200) for r in search.results[:3]
-                )
-                context_with_search = list(context) + [{
-                    "role": "user",
-                    "content": (
-                        f"Use this web search data to answer: '{user_input}'\n\n"
-                        f"Search data:\n{search_context}\n\n"
-                        f"IMPORTANT RULES:\n"
-                        f"- For any numbers, stats, or figures: use ONLY what is explicitly stated in the search data above. Do NOT guess or use memory.\n"
-                        f"- If the search data mentions a number, quote it exactly and mention the source.\n"
-                        f"- If search data is unclear or missing, say 'I couldn't confirm the exact figure, Sir' rather than guessing.\n"
-                        f"- Be concise, Sir."
-                    ),
-                }]
-                response = stream_response(context_with_search, container=response_container)
-            else:
-                response = stream_response(context, container=response_container)
+            logger.info("No intent matched — LLM handling directly")
+
+            # Step 1: Let the LLM try first
+            response = stream_response(context, container=response_container)
+
+            # Step 2: Only web search if LLM admits uncertainty
+            if _needs_web_search(response):
+                logger.info("LLM uncertain — triggering fallback web search")
+                with st.spinner("🔎 Searching the web for more info…"):
+                    search = web_search(user_input)
+                if search.success:
+                    search_context = "\n".join(
+                        r.clean_snippet(200) for r in search.results[:3]
+                    )
+                    response_container.empty()
+                    response_container2 = st.empty()
+                    context_with_search = list(context) + [{
+                        "role": "user",
+                        "content": (
+                            f"Use this web search data to answer: '{user_input}'\n\n"
+                            f"Search data:\n{search_context}\n\n"
+                            f"IMPORTANT RULES:\n"
+                            f"- Use ONLY what is explicitly stated in the search data. Do NOT guess.\n"
+                            f"- If a number/stat is mentioned, quote it exactly.\n"
+                            f"- If unclear, say 'I couldn't confirm the exact figure, Sir'.\n"
+                            f"- Be concise, Sir."
+                        ),
+                    }]
+                    response = stream_with_search_context(
+                        context, search_context, container=response_container2
+                    )
 
         if response:
             append_message("assistant", response)
