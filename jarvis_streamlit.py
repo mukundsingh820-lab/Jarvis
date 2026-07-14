@@ -923,16 +923,6 @@ def stream_with_search_context(conversation: list[dict], search_context: str, co
     result = stream_response(enriched, container=container)
     return f"🔎 *(Web-searched)*\n\n{result}"
 
-# ── Orchestrator hookup ─────────────────────────────────────────────────────────
-# Imported here (not at the top of the file) on purpose: orchestrator.py does
-# `from helix import (...)` and needs every one of those names — IntentType,
-# the _score_* functions, calculate, get_weather, get_news, web_search,
-# stream_response, stream_with_search_context, load_recent, _needs_web_search,
-# _groq_client, logger, CONFIDENCE_THRESHOLD, LLM_MODEL, LLM_CONTEXT_LIMIT —
-# to already exist. Importing it earlier would create a circular import
-# (orchestrator reaching back into a half-initialized helix module).
-from orchestrator import orchestrate
-
 # ── UI Styles ──────────────────────────────────────────────────────────────────
 def inject_styles(theme_name: str = "dark") -> None:
     t = THEMES.get(theme_name, THEMES["dark"])
@@ -1507,7 +1497,116 @@ if user_input:
         st.markdown(f"**👤 SIR:** {user_input}")
 
     with st.chat_message("assistant"):
-        response = orchestrate(user_input)
+        response: str | None = None
+        intent = detect_intent(user_input)
+
+        if intent:
+            logger.info(f"Routing to agent: {intent.type}")
+
+            # ── TIME/DATE: answered directly by LLM — no web search ever ──────
+            if intent.type == IntentType.TIME_DATE:
+                logger.info("Time/date query — routing directly to LLM")
+                context = load_recent(limit=LLM_CONTEXT_LIMIT)
+                response_container = st.empty()
+                response = stream_response(context, container=response_container)
+
+            elif intent.type == IntentType.CALCULATOR:
+                expr = intent.payload.get("expression", user_input)
+                result = calculate(expr)
+                if result.success:
+                    response = f"🧮 **Result:** `{result.expression}` = **{result.result}**"
+                else:
+                    response = f"I couldn't calculate that, Sir: {result.error}"
+
+            elif intent.type == IntentType.WEATHER:
+                location = intent.payload.get("location", "London")
+                with st.spinner(f"Fetching weather for {location}…"):
+                    weather = get_weather(location)
+                if weather:
+                    response = weather.format_response()
+                else:
+                    response = f"⚠️ Couldn't fetch weather for {location}, Sir."
+
+            elif intent.type == IntentType.NEWS:
+                query = intent.payload.get("query", "latest")
+                with st.spinner("Fetching latest headlines…"):
+                    news = get_news(query)
+                if news.success:
+                    headlines = "\n".join(
+                        f"- {a.title} ({a.source})"
+                        for a in news.articles
+                    )
+                    context = load_recent(limit=LLM_CONTEXT_LIMIT)
+                    context_with_news = list(context) + [{
+                        "role": "user",
+                        "content": (
+                            f"Present these headlines as a clean numbered list. "
+                            f"Each item on its own line. Format: '1. Title — Source'. "
+                            f"No descriptions. No links. No extra text. Just the list.\n\n"
+                            f"{headlines}"
+                        ),
+                    }]
+                    response_container = st.empty()
+                    response = stream_response(context_with_news, container=response_container)
+                else:
+                    response = news.format_response()
+
+            elif intent.type == IntentType.SEARCH:
+                query = intent.payload.get("query", user_input)
+                with st.spinner(f"Searching for '{query}'…"):
+                    search = web_search(query)
+                if search.success:
+                    context = load_recent(limit=LLM_CONTEXT_LIMIT)
+                    search_context = "\n".join(
+                        r.clean_snippet(200) for r in search.results[:3]
+                    )
+                    context_with_search = list(context) + [{
+                        "role": "user",
+                        "content": (
+                            f"Based on this search data, answer in 1-2 SHORT sentences only: '{user_input}'\n\n"
+                            f"Search data:\n{search_context}"
+                        ),
+                    }]
+                    response_container = st.empty()
+                    response = stream_response(context_with_search, container=response_container)
+                else:
+                    response = search.format_response(query)
+
+        # ── FALLBACK: LLM answers first; web search only if uncertain ─────────
+        if response is None:
+            context = load_recent(limit=LLM_CONTEXT_LIMIT)
+            response_container = st.empty()
+            logger.info("No intent matched — LLM handling directly")
+
+            # Step 1: Let the LLM try first
+            response = stream_response(context, container=response_container)
+
+            # Step 2: Only web search if LLM admits uncertainty
+            if _needs_web_search(response):
+                logger.info("LLM uncertain — triggering fallback web search")
+                with st.spinner("🔎 Searching the web for more info…"):
+                    search = web_search(user_input)
+                if search.success:
+                    search_context = "\n".join(
+                        r.clean_snippet(200) for r in search.results[:3]
+                    )
+                    response_container.empty()
+                    response_container2 = st.empty()
+                    context_with_search = list(context) + [{
+                        "role": "user",
+                        "content": (
+                            f"Use this web search data to answer: '{user_input}'\n\n"
+                            f"Search data:\n{search_context}\n\n"
+                            f"IMPORTANT RULES:\n"
+                            f"- Use ONLY what is explicitly stated in the search data. Do NOT guess.\n"
+                            f"- If a number/stat is mentioned, quote it exactly.\n"
+                            f"- If unclear, say 'I couldn't confirm the exact figure, Sir'.\n"
+                            f"- Be concise, Sir."
+                        ),
+                    }]
+                    response = stream_with_search_context(
+                        context, search_context, container=response_container2
+                    )
 
         if response:
             append_message("assistant", response)
