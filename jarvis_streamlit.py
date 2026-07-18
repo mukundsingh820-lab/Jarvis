@@ -907,10 +907,6 @@ def _build_system_prompt() -> str:
     current_time = datetime.now(IST).strftime("%A, %d %B %Y, %I:%M %p")
     return SYSTEM_PROMPT_TEMPLATE.format(current_time=current_time)
 
-def _needs_web_search(text: str) -> bool:
-    lower = text.lower()
-    return any(phrase in lower for phrase in UNCERTAINTY_PHRASES)
-
 def _get_active_model_index() -> int:
     return st.session_state.get(_MODEL_STATE_KEY, 0)
 
@@ -989,6 +985,242 @@ def stream_with_search_context(conversation: list[dict], search_context: str, co
     })
     result = stream_response(enriched, container=container)
     return f"🔎 *(Web-searched)*\n\n{result}"
+
+# ── Orchestrator ───────────────────────────────────────────────────────────────
+# Lets the model plan and chain multiple tool calls in a single turn (e.g.
+# "weather in Delhi and calculate a 15% tip on 2000") instead of the old
+# regex intent detector, which could only ever pick one tool per message.
+
+MAX_ORCHESTRATOR_ROUNDS: int = 4
+ORCHESTRATOR_PLANNING_TOKENS: int = 512
+
+ORCHESTRATOR_TOOLS: list[dict] = [
+    {
+        "type": "function",
+        "function": {
+            "name": "calculator",
+            "description": (
+                "Evaluate a mathematical expression. Supports +,-,*,/,^,sqrt,sin,cos,"
+                "tan,log,factorial etc. Use for any arithmetic, percentages, or unit math."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "expression": {
+                        "type": "string",
+                        "description": "The math expression to evaluate, e.g. '15% of 2000' → '2000*0.15', or 'sqrt(144)'",
+                    }
+                },
+                "required": ["expression"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_weather",
+            "description": "Get the current weather for a specific city/location.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "location": {"type": "string", "description": "City name, e.g. 'Delhi' or 'London'"}
+                },
+                "required": ["location"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_news",
+            "description": "Get latest news headlines, optionally filtered by topic.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Topic to search news for, or 'latest' for top headlines"}
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "web_search",
+            "description": (
+                "Search the web for current events, facts, or anything not in your "
+                "own knowledge (people, places, recent happenings, specific entities)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {"query": {"type": "string", "description": "The search query"}},
+                "required": ["query"],
+            },
+        },
+    },
+]
+
+def _safe_json_loads(raw: str | None) -> dict:
+    if not raw:
+        return {}
+    try:
+        parsed = json.loads(raw)
+        return parsed if isinstance(parsed, dict) else {}
+    except (json.JSONDecodeError, TypeError):
+        return {}
+
+def _execute_tool(name: str, args: dict) -> str:
+    """Runs one tool call and returns a compact text result to feed back to the LLM."""
+    try:
+        if name == "calculator":
+            result = calculate(args.get("expression", ""))
+            if result.success:
+                return f"{result.expression} = {result.result}"
+            return f"Error: {result.error}"
+
+        if name == "get_weather":
+            location = args.get("location", "London")
+            weather = get_weather(location)
+            return weather.format_response() if weather else f"Could not fetch weather for {location}."
+
+        if name == "get_news":
+            query = args.get("query", "latest")
+            news = get_news(query)
+            if news.success:
+                return "\n".join(f"- {a.title} ({a.source})" for a in news.articles)
+            return news.error or "No news found."
+
+        if name == "web_search":
+            query = args.get("query", "")
+            search = web_search(query)
+            if search.success:
+                return "\n".join(r.clean_snippet(200) for r in search.results[:3])
+            return search.error or "No results found."
+
+        return f"Unknown tool requested: {name}"
+    except Exception as exc:
+        logger.error(f"Tool '{name}' raised an exception: {exc}")
+        return f"Tool '{name}' failed to run: {exc}"
+
+def _plan_next_step(planning_messages: list[dict]):
+    """
+    One non-streaming Groq call asking the model whether it needs a tool.
+    Returns the assistant message object on success, or None if every model
+    in GROQ_MODELS failed (mirrors the fallback logic in stream_response).
+    """
+    if not _groq_client:
+        return None
+
+    start_index = _get_active_model_index()
+    last_error: Exception | None = None
+
+    for offset in range(len(GROQ_MODELS)):
+        model_index = (start_index + offset) % len(GROQ_MODELS)
+        model_name = GROQ_MODELS[model_index]
+        try:
+            logger.info(f"Orchestrator planning call: model='{model_name}'")
+            resp = _groq_client.chat.completions.create(
+                model=model_name,
+                messages=planning_messages,
+                tools=ORCHESTRATOR_TOOLS,
+                tool_choice="auto",
+                max_tokens=ORCHESTRATOR_PLANNING_TOKENS,
+                temperature=0.3,
+            )
+            _set_active_model_index(model_index)
+            return resp.choices[0].message
+        except (RateLimitError, APIStatusError, APIConnectionError) as exc:
+            last_error = exc
+            logger.warning(f"Orchestrator planning failed on '{model_name}' ({exc}); trying next model")
+            continue
+        except Exception as exc:
+            last_error = exc
+            logger.error(f"Orchestrator planning unexpected error on '{model_name}': {exc}")
+            continue
+
+    logger.error(f"Orchestrator planning exhausted all models. Last error: {last_error}")
+    return None
+
+def run_orchestrator(conversation: list[dict], container=None) -> str:
+    """
+    Multi-step agent: lets the model decide (and chain) which tools to call
+    across up to MAX_ORCHESTRATOR_ROUNDS rounds, executes them, then hands the
+    combined tool output to the existing streaming pipeline (with its model
+    fallback already built in) to produce the final answer, Sir.
+    """
+    if not _groq_client:
+        return "❌ GROQ_API_KEY is not configured, Sir."
+
+    planning_messages = [{
+        "role": "system",
+        "content": (
+            _build_system_prompt()
+            + "\n\nYou may call the available tools, including multiple tools in the same turn "
+              "or across turns, to fully answer requests with several parts (e.g. weather AND a "
+              "calculation). Only call a tool when the request genuinely needs it — for normal "
+              "conversation, just reply directly with no tool calls."
+        ),
+    }]
+    planning_messages.extend(conversation[-LLM_CONTEXT_LIMIT:])
+
+    tool_log: list[str] = []
+    status = st.status("🧠 Thinking…", expanded=False) if container is not None else None
+
+    for round_num in range(MAX_ORCHESTRATOR_ROUNDS):
+        assistant_msg = _plan_next_step(planning_messages)
+        if assistant_msg is None:
+            if status:
+                status.update(label="⚠️ Models unavailable", state="error")
+            return "⚠️ All AI models are currently unavailable, Sir. Please try again shortly."
+
+        tool_calls = getattr(assistant_msg, "tool_calls", None)
+        if not tool_calls:
+            break  # model is ready to answer directly — no more tools needed
+
+        planning_messages.append({
+            "role": "assistant",
+            "content": assistant_msg.content or "",
+            "tool_calls": [
+                {
+                    "id": tc.id,
+                    "type": "function",
+                    "function": {"name": tc.function.name, "arguments": tc.function.arguments},
+                }
+                for tc in tool_calls
+            ],
+        })
+
+        for tc in tool_calls:
+            tool_name = tc.function.name
+            tool_args = _safe_json_loads(tc.function.arguments)
+            if status:
+                status.write(f"🔧 Using **{tool_name}**({', '.join(f'{k}={v}' for k, v in tool_args.items())})")
+            result_text = _execute_tool(tool_name, tool_args)
+            tool_log.append(f"[{tool_name}] {result_text}")
+            planning_messages.append({
+                "role": "tool",
+                "tool_call_id": tc.id,
+                "content": result_text,
+            })
+    else:
+        logger.warning(f"Orchestrator hit MAX_ORCHESTRATOR_ROUNDS ({MAX_ORCHESTRATOR_ROUNDS}) without finishing")
+
+    if status:
+        status.update(label="✅ Done" if tool_log else "💬 Answering", state="complete")
+
+    if tool_log:
+        combined = "\n\n".join(tool_log)
+        final_conversation = list(conversation) + [{
+            "role": "user",
+            "content": (
+                f"Using the tool results below, give one complete, direct answer covering every "
+                f"part of my original message, Sir.\n\nTool results:\n{combined}"
+            ),
+        }]
+        answer = stream_response(final_conversation, container=container)
+        return f"🛠️ *(Orchestrated: {', '.join(t.split(']')[0][1:] for t in tool_log)})*\n\n{answer}"
+
+    return stream_response(conversation, container=container)
 
 # ── UI Styles ──────────────────────────────────────────────────────────────────
 def inject_styles(theme_name: str = "dark") -> None:
@@ -1563,11 +1795,11 @@ with st.sidebar:
     st.divider()
     st.markdown("### 🛠️ FEATURES")
     st.markdown(
+        "🧠 **Orchestrator** — Plans & chains tools in one turn\n\n"
         "🌤️ **Weather** — Ask about weather\n\n"
         "🗞️ **News** — Get latest headlines\n\n"
         "🔍 **Web Search** — Search the web\n\n"
-        "🧮 **Calculator** — Solve math (AST-safe)\n\n"
-        "🔎 **Auto Search** — Triggered when LLM is uncertain"
+        "🧮 **Calculator** — Solve math (AST-safe)"
     )
 
 # FIX #3: any failure loading history shows a friendly message instead of a
@@ -1607,110 +1839,23 @@ if user_input:
             response: str | None = None
             intent = detect_intent(user_input)
 
-            if intent:
-                logger.info(f"Routing to agent: {intent.type}")
-
-                if intent.type == IntentType.TIME_DATE:
-                    logger.info("Time/date query — routing directly to LLM")
-                    context = load_recent(session_id, limit=LLM_CONTEXT_LIMIT)
-                    response_container = st.empty()
-                    response = stream_response(context, container=response_container)
-
-                elif intent.type == IntentType.CALCULATOR:
-                    expr = intent.payload.get("expression", user_input)
-                    result = calculate(expr)
-                    if result.success:
-                        response = f"🧮 **Result:** `{result.expression}` = **{result.result}**"
-                    else:
-                        response = f"I couldn't calculate that, Sir: {result.error}"
-
-                elif intent.type == IntentType.WEATHER:
-                    location = intent.payload.get("location", "London")
-                    with st.spinner(f"Fetching weather for {location}…"):
-                        weather = get_weather(location)
-                    if weather:
-                        response = weather.format_response()
-                    else:
-                        response = f"⚠️ Couldn't fetch weather for {location}, Sir."
-
-                elif intent.type == IntentType.NEWS:
-                    query = intent.payload.get("query", "latest")
-                    with st.spinner("Fetching latest headlines…"):
-                        news = get_news(query)
-                    if news.success:
-                        headlines = "\n".join(
-                            f"- {a.title} ({a.source})"
-                            for a in news.articles
-                        )
-                        context = load_recent(session_id, limit=LLM_CONTEXT_LIMIT)
-                        context_with_news = list(context) + [{
-                            "role": "user",
-                            "content": (
-                                f"Present these headlines as a clean numbered list. "
-                                f"Each item on its own line. Format: '1. Title — Source'. "
-                                f"No descriptions. No links. No extra text. Just the list.\n\n"
-                                f"{headlines}"
-                            ),
-                        }]
-                        response_container = st.empty()
-                        response = stream_response(context_with_news, container=response_container)
-                    else:
-                        response = news.format_response()
-
-                elif intent.type == IntentType.SEARCH:
-                    query = intent.payload.get("query", user_input)
-                    with st.spinner(f"Searching for '{query}'…"):
-                        search = web_search(query)
-                    if search.success:
-                        context = load_recent(session_id, limit=LLM_CONTEXT_LIMIT)
-                        search_context = "\n".join(
-                            r.clean_snippet(200) for r in search.results[:3]
-                        )
-                        context_with_search = list(context) + [{
-                            "role": "user",
-                            "content": (
-                                f"Based on this search data, answer in 1-2 SHORT sentences only: '{user_input}'\n\n"
-                                f"Search data:\n{search_context}"
-                            ),
-                        }]
-                        response_container = st.empty()
-                        response = stream_response(context_with_search, container=response_container)
-                    else:
-                        response = search.format_response(query)
-
-            # ── FALLBACK: LLM answers first; web search only if uncertain ─────
-            if response is None:
+            # Fast path: pure time/date questions never need a tool, so skip
+            # the orchestrator's planning round-trip entirely.
+            if intent and intent.type == IntentType.TIME_DATE:
+                logger.info("Time/date query — routing directly to LLM (fast path)")
                 context = load_recent(session_id, limit=LLM_CONTEXT_LIMIT)
                 response_container = st.empty()
-                logger.info("No intent matched — LLM handling directly")
-
                 response = stream_response(context, container=response_container)
-
-                if _needs_web_search(response):
-                    logger.info("LLM uncertain — triggering fallback web search")
-                    with st.spinner("🔎 Searching the web for more info…"):
-                        search = web_search(user_input)
-                    if search.success:
-                        search_context = "\n".join(
-                            r.clean_snippet(200) for r in search.results[:3]
-                        )
-                        response_container.empty()
-                        response_container2 = st.empty()
-                        context_with_search = list(context) + [{
-                            "role": "user",
-                            "content": (
-                                f"Use this web search data to answer: '{user_input}'\n\n"
-                                f"Search data:\n{search_context}\n\n"
-                                f"IMPORTANT RULES:\n"
-                                f"- Use ONLY what is explicitly stated in the search data. Do NOT guess.\n"
-                                f"- If a number/stat is mentioned, quote it exactly.\n"
-                                f"- If unclear, say 'I couldn't confirm the exact figure, Sir'.\n"
-                                f"- Be concise, Sir."
-                            ),
-                        }]
-                        response = stream_with_search_context(
-                            context, search_context, container=response_container2
-                        )
+            else:
+                # Everything else — including compound requests that need
+                # more than one tool (e.g. "weather in Delhi and calculate a
+                # 15% tip on 2000") — goes through the multi-step orchestrator,
+                # which lets the model plan, chain, and execute tools itself
+                # instead of a single regex-picked intent.
+                logger.info("Routing to orchestrator")
+                context = load_recent(session_id, limit=LLM_CONTEXT_LIMIT)
+                response_container = st.empty()
+                response = run_orchestrator(context, container=response_container)
 
             if response:
                 try:
