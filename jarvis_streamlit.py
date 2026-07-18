@@ -9,6 +9,7 @@ import random
 import re
 import sqlite3
 import sys
+import tempfile
 import time
 import uuid
 import urllib.parse
@@ -46,7 +47,9 @@ LLM_TEMPERATURE: float = 0.7
 
 DISPLAY_HISTORY_LIMIT: int = 20
 LLM_CONTEXT_LIMIT: int = 20
-MEMORY_DB_PATH: str = "helix_memory.db"
+# Streamlit Cloud mounts the app's source folder read-only (/mount/src/...),
+# so the DB file must live in a writable location like /tmp instead.
+MEMORY_DB_PATH: str = os.path.join(tempfile.gettempdir(), "helix_memory.db")
 
 HTTP_TIMEOUT: int = 8
 HTTP_MAX_RETRIES: int = 3
@@ -156,7 +159,9 @@ def get_logger(name: str = "helix") -> logging.Logger:
     )
     handler.setFormatter(fmt)
     _logger.addHandler(handler)
-    file_handler = logging.FileHandler("helix.log", encoding="utf-8")
+    file_handler = logging.FileHandler(
+        os.path.join(tempfile.gettempdir(), "helix.log"), encoding="utf-8"
+    )
     file_handler.setLevel(logging.INFO)
     file_handler.setFormatter(fmt)
     _logger.addHandler(file_handler)
