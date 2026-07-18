@@ -10,6 +10,7 @@ import re
 import sqlite3
 import sys
 import time
+import uuid
 import urllib.parse
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -23,7 +24,7 @@ import psutil
 import pytz
 import streamlit as st
 from dotenv import load_dotenv
-from groq import Groq, RateLimitError, APIConnectionError
+from groq import Groq, RateLimitError, APIConnectionError, APIStatusError
 
 load_dotenv()
 
@@ -32,7 +33,14 @@ GROQ_API_KEY: str = st.secrets.get("GROQ_API_KEY", os.getenv("GROQ_API_KEY", "")
 NEWS_API_KEY: str = st.secrets.get("NEWS_API_KEY", os.getenv("NEWS_API_KEY", ""))
 TAVILY_API_KEY: str = st.secrets.get("TAVILY_API_KEY", os.getenv("TAVILY_API_KEY", ""))
 
-LLM_MODEL: str = "llama-3.3-70b-versatile"
+# Ordered list of models to try. If the first is unavailable/deprecated/rate
+# limited, HELIX automatically falls through to the next one.
+# NOTE: llama-3.3-70b-versatile was deprecated by Groq (announced 2026-06-17).
+GROQ_MODELS: list[str] = [
+    "openai/gpt-oss-120b",
+    "qwen/qwen3.6-27b",
+    "llama-3.1-8b-instant",
+]
 LLM_MAX_TOKENS: int = 1024
 LLM_TEMPERATURE: float = 0.7
 
@@ -47,6 +55,8 @@ HTTP_BACKOFF_FACTOR: float = 0.5
 WEATHER_CACHE_TTL: int = 600
 NEWS_CACHE_TTL: int = 300
 SEARCH_CACHE_TTL: int = 300
+
+DB_BUSY_TIMEOUT_MS: int = 8000  # how long SQLite waits on a locked db before erroring
 
 IST = pytz.timezone("Asia/Kolkata")
 
@@ -661,25 +671,36 @@ def web_search(query: str) -> SearchResponse:
     return SearchResponse(error="All search sources exhausted. Try rephrasing your query.")
 
 # ── Memory ─────────────────────────────────────────────────────────────────────
+# FIX #1: every row is now scoped to a session_id so one visitor never sees
+# another visitor's conversation.
+# FIX #5: WAL mode + a busy_timeout PRAGMA + a retry wrapper around the actual
+# DB operations so concurrent users hitting the same SQLite file back off and
+# retry instead of throwing "database is locked".
 _CREATE_TABLE = """
 CREATE TABLE IF NOT EXISTS messages (
-    id        INTEGER PRIMARY KEY AUTOINCREMENT,
-    role      TEXT    NOT NULL CHECK(role IN ('user', 'assistant', 'system')),
-    content   TEXT    NOT NULL,
-    ts        TEXT    NOT NULL DEFAULT (datetime('now'))
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT    NOT NULL,
+    role       TEXT    NOT NULL CHECK(role IN ('user', 'assistant', 'system')),
+    content    TEXT    NOT NULL,
+    ts         TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 """
+_CREATE_INDEX = """
+CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, id);
+"""
 
-_CURRENT_SCHEMA_VERSION = 1
+_CURRENT_SCHEMA_VERSION = 2
 
 @contextmanager
 def _db() -> Generator[sqlite3.Connection, None, None]:
     conn = sqlite3.connect(MEMORY_DB_PATH, check_same_thread=False, timeout=10)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA synchronous=NORMAL")
+    conn.execute(f"PRAGMA busy_timeout={DB_BUSY_TIMEOUT_MS}")
     conn.row_factory = sqlite3.Row
     try:
         conn.execute(_CREATE_TABLE)
+        conn.execute(_CREATE_INDEX)
         conn.commit()
         yield conn
     except sqlite3.Error as exc:
@@ -691,39 +712,52 @@ def _db() -> Generator[sqlite3.Connection, None, None]:
 
 def _migrate(conn: sqlite3.Connection) -> None:
     version = conn.execute("PRAGMA user_version").fetchone()[0]
-    if version < _CURRENT_SCHEMA_VERSION:
+    if version < 2:
+        # Legacy DBs from before session isolation may lack session_id.
+        cols = [row["name"] for row in conn.execute("PRAGMA table_info(messages)")]
+        if "session_id" not in cols:
+            conn.execute("ALTER TABLE messages ADD COLUMN session_id TEXT NOT NULL DEFAULT 'legacy'")
         conn.execute(f"PRAGMA user_version = {_CURRENT_SCHEMA_VERSION}")
         conn.commit()
         logger.info(f"DB migrated to schema version {_CURRENT_SCHEMA_VERSION}")
 
-def append_message(role: str, content: str) -> None:
+@with_retry(max_attempts=4, base_delay=0.25, max_delay=2.0, exceptions=(sqlite3.OperationalError,))
+def append_message(session_id: str, role: str, content: str) -> None:
     ts = datetime.now(IST).isoformat()
     with _db() as conn:
+        _migrate(conn)
         conn.execute(
-            "INSERT INTO messages (role, content, ts) VALUES (?, ?, ?)",
-            (role, content, ts),
+            "INSERT INTO messages (session_id, role, content, ts) VALUES (?, ?, ?, ?)",
+            (session_id, role, content, ts),
         )
         conn.commit()
-    logger.debug(f"Memory: appended {role} message ({len(content)} chars)")
+    logger.debug(f"Memory: appended {role} message ({len(content)} chars) for session {session_id[:8]}")
 
-def load_recent(limit: int = 20) -> list[dict]:
+@with_retry(max_attempts=4, base_delay=0.25, max_delay=2.0, exceptions=(sqlite3.OperationalError,))
+def load_recent(session_id: str, limit: int = 20) -> list[dict]:
     with _db() as conn:
         _migrate(conn)
         rows = conn.execute(
-            "SELECT role, content FROM messages ORDER BY id DESC LIMIT ?",
-            (limit,),
+            "SELECT role, content FROM messages WHERE session_id = ? ORDER BY id DESC LIMIT ?",
+            (session_id, limit),
         ).fetchall()
     return [{"role": r["role"], "content": r["content"]} for r in reversed(rows)]
 
-def clear_memory() -> None:
+@with_retry(max_attempts=4, base_delay=0.25, max_delay=2.0, exceptions=(sqlite3.OperationalError,))
+def clear_memory(session_id: str) -> None:
     with _db() as conn:
-        conn.execute("DELETE FROM messages")
+        _migrate(conn)
+        conn.execute("DELETE FROM messages WHERE session_id = ?", (session_id,))
         conn.commit()
-    logger.info("Memory cleared")
+    logger.info(f"Memory cleared for session {session_id[:8]}")
 
-def message_count() -> int:
+@with_retry(max_attempts=4, base_delay=0.25, max_delay=2.0, exceptions=(sqlite3.OperationalError,))
+def message_count(session_id: str) -> int:
     with _db() as conn:
-        return conn.execute("SELECT COUNT(*) FROM messages").fetchone()[0]
+        _migrate(conn)
+        return conn.execute(
+            "SELECT COUNT(*) FROM messages WHERE session_id = ?", (session_id,)
+        ).fetchone()[0]
 
 # ── Intent Detection ───────────────────────────────────────────────────────────
 class IntentType(str, Enum):
@@ -731,7 +765,7 @@ class IntentType(str, Enum):
     WEATHER     = "weather"
     NEWS        = "news"
     SEARCH      = "search"
-    TIME_DATE   = "time_date"   # ← NEW: handled by LLM only, no web search
+    TIME_DATE   = "time_date"   # ← handled by LLM only, no web search
 
 @dataclass
 class Intent:
@@ -776,7 +810,6 @@ _LOCAL_ENTITY = re.compile(
     re.IGNORECASE,
 )
 
-# ── NEW: Time/date pattern — always answered by LLM from system prompt ─────────
 _TIME_DATE_QUERY = re.compile(
     r"\b(what time|what'?s the time|current time|time now|time is it|"
     r"what date|today'?s date|what day|what year|what month|"
@@ -788,7 +821,7 @@ _TIME_DATE_QUERY = re.compile(
 
 def _score_time_date(text: str) -> tuple[float, dict]:
     if _TIME_DATE_QUERY.search(text):
-        return 0.99, {}   # Highest priority — always wins
+        return 0.99, {}
     return 0.0, {}
 
 def _score_calculator(text: str) -> tuple[float, dict]:
@@ -836,7 +869,7 @@ def _score_search(text: str) -> tuple[float, dict]:
 
 def detect_intent(user_input: str) -> Optional[Intent]:
     scorers = {
-        IntentType.TIME_DATE:   _score_time_date,    # ← checked first via score
+        IntentType.TIME_DATE:   _score_time_date,
         IntentType.CALCULATOR:  _score_calculator,
         IntentType.WEATHER:     _score_weather,
         IntentType.NEWS:        _score_news,
@@ -860,7 +893,10 @@ def detect_intent(user_input: str) -> Optional[Intent]:
     return None
 
 # ── LLM ────────────────────────────────────────────────────────────────────────
+# FIX #4: automatic model fallback. We remember which model last worked (per
+# server process) so we don't re-try dead models on every single message.
 _groq_client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
+_MODEL_STATE_KEY = "helix_active_model_index"
 
 def _build_system_prompt() -> str:
     current_time = datetime.now(IST).strftime("%A, %d %B %Y, %I:%M %p")
@@ -870,45 +906,71 @@ def _needs_web_search(text: str) -> bool:
     lower = text.lower()
     return any(phrase in lower for phrase in UNCERTAINTY_PHRASES)
 
+def _get_active_model_index() -> int:
+    return st.session_state.get(_MODEL_STATE_KEY, 0)
+
+def _set_active_model_index(index: int) -> None:
+    st.session_state[_MODEL_STATE_KEY] = index
+
 def stream_response(conversation: list[dict], container=None) -> str:
     if not _groq_client:
         return "❌ GROQ_API_KEY is not configured, Sir."
+
     messages = [{"role": "system", "content": _build_system_prompt()}]
     messages.extend(conversation[-LLM_CONTEXT_LIMIT:])
 
-    def _chunk_generator() -> Generator[str, None, None]:
-        stream = _groq_client.chat.completions.create(
-            model=LLM_MODEL,
-            messages=messages,
-            max_tokens=LLM_MAX_TOKENS,
-            temperature=LLM_TEMPERATURE,
-            stream=True,
-        )
-        for chunk in stream:
-            delta = chunk.choices[0].delta.content
-            if delta:
-                yield delta
+    start_index = _get_active_model_index()
+    last_error: Exception | None = None
 
-    try:
-        logger.info(f"LLM call: {len(messages)} messages in context")
-        if container:
-            full_response = container.write_stream(_chunk_generator())
-        else:
-            full_response = st.write_stream(_chunk_generator())
-        logger.info(f"LLM response: {len(full_response)} chars")
-        return full_response
-    except RateLimitError:
-        msg = "⚠️ Rate limit reached, Sir. Please wait a moment and try again."
-        logger.warning("Groq rate limit hit")
-        return msg
-    except APIConnectionError as exc:
-        msg = f"⚠️ Connection to AI service failed: {exc}"
-        logger.error(f"Groq connection error: {exc}")
-        return msg
-    except Exception as exc:
-        msg = f"⚠️ Unexpected error from AI service: {exc}"
-        logger.error(f"Groq unexpected error: {exc}")
-        return msg
+    for offset in range(len(GROQ_MODELS)):
+        model_index = (start_index + offset) % len(GROQ_MODELS)
+        model_name = GROQ_MODELS[model_index]
+
+        def _chunk_generator() -> Generator[str, None, None]:
+            stream = _groq_client.chat.completions.create(
+                model=model_name,
+                messages=messages,
+                max_tokens=LLM_MAX_TOKENS,
+                temperature=LLM_TEMPERATURE,
+                stream=True,
+            )
+            for chunk in stream:
+                delta = chunk.choices[0].delta.content
+                if delta:
+                    yield delta
+
+        try:
+            logger.info(f"LLM call: model='{model_name}', {len(messages)} messages in context")
+            if container:
+                full_response = container.write_stream(_chunk_generator())
+            else:
+                full_response = st.write_stream(_chunk_generator())
+            logger.info(f"LLM response: {len(full_response)} chars (model={model_name})")
+            if model_index != start_index:
+                logger.warning(f"Switched active model to '{model_name}' after fallback")
+            _set_active_model_index(model_index)
+            return full_response
+
+        except RateLimitError as exc:
+            last_error = exc
+            logger.warning(f"Model '{model_name}' rate limited, trying next fallback if available")
+            continue
+        except APIStatusError as exc:
+            # Covers deprecated/decommissioned/unknown model responses (400/404) from Groq.
+            last_error = exc
+            logger.warning(f"Model '{model_name}' returned API error ({exc}); trying next fallback")
+            continue
+        except APIConnectionError as exc:
+            last_error = exc
+            logger.error(f"Connection error contacting Groq for model '{model_name}': {exc}")
+            continue
+        except Exception as exc:
+            last_error = exc
+            logger.error(f"Unexpected error from model '{model_name}': {exc}")
+            continue
+
+    logger.error(f"All Groq models exhausted. Last error: {last_error}")
+    return "⚠️ All AI models are currently unavailable, Sir. Please try again shortly."
 
 def stream_with_search_context(conversation: list[dict], search_context: str, container=None) -> str:
     enriched = list(conversation)
@@ -1433,6 +1495,15 @@ def render_header(accent_color: str) -> None:
     </div>
     """, unsafe_allow_html=True)
 
+def render_user_line(text: str) -> str:
+    """
+    FIX #2: escape user-supplied text before it ever touches st.markdown, so a
+    message like '<img src=x onerror=alert(1)>' is displayed as literal text
+    instead of being parsed as HTML/JS. Assistant output is left as-is since
+    it's LLM-generated markdown (bold, links) that we intentionally render.
+    """
+    return f"**👤 SIR:** {html.escape(text)}"
+
 # ── App ────────────────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="HELIX - AI Assistant",
@@ -1444,6 +1515,11 @@ st.set_page_config(
 if not GROQ_API_KEY:
     st.error("❌ GROQ_API_KEY not found in environment. Add it to your .env file.")
     st.stop()
+
+# FIX #1: one stable, private session id per browser tab/session.
+if "session_id" not in st.session_state:
+    st.session_state.session_id = str(uuid.uuid4())
+session_id: str = st.session_state.session_id
 
 if "dark_mode" not in st.session_state:
     st.session_state.dark_mode = True
@@ -1458,18 +1534,27 @@ with st.sidebar:
     mode_label = "☀️ Light Mode" if st.session_state.dark_mode else "🌙 Dark Mode"
     if st.button(mode_label, use_container_width=True):
         st.session_state.dark_mode = not st.session_state.dark_mode
-        st.rerun()
+        st.rerun()  # needed: whole page restyles, so a full rerun is correct here
     st.divider()
     st.markdown("### ⚙️ SYSTEM STATUS")
     st.write(f"🕐 {datetime.now(IST).strftime('%H:%M:%S IST')}")
     st.write(f"💾 RAM: {psutil.virtual_memory().percent}%")
     st.write(f"⚙️ CPU: {psutil.cpu_percent()}%")
+    active_model = GROQ_MODELS[_get_active_model_index() % len(GROQ_MODELS)]
+    st.write(f"🤖 Model: {active_model}")
     st.divider()
-    total = message_count()
+    try:
+        total = message_count(session_id)
+    except sqlite3.OperationalError:
+        total = "?"
+        st.warning("⚠️ Memory temporarily busy, Sir.")
     st.write(f"💬 Messages: {total}")
     if st.button("🗑️ Clear Memory", use_container_width=True):
-        clear_memory()
-        st.rerun()
+        try:
+            clear_memory(session_id)
+        except sqlite3.OperationalError:
+            st.error("⚠️ Couldn't clear memory right now, Sir — please try again.")
+        st.rerun()  # needed: history list must disappear immediately
     st.divider()
     st.markdown("### 🛠️ FEATURES")
     st.markdown(
@@ -1480,136 +1565,165 @@ with st.sidebar:
         "🔎 **Auto Search** — Triggered when LLM is uncertain"
     )
 
-history = load_recent(limit=DISPLAY_HISTORY_LIMIT)
+# FIX #3: any failure loading history shows a friendly message instead of a
+# raw traceback / crashed app.
+try:
+    history = load_recent(session_id, limit=DISPLAY_HISTORY_LIMIT)
+except Exception as exc:
+    logger.error(f"Failed to load chat history: {exc}")
+    st.error("⚠️ Couldn't load your chat history right now, Sir. Starting fresh for this view.")
+    history = []
 
 for msg in history:
-    role_label = "👤 SIR" if msg["role"] == "user" else "🧬 HELIX"
     with st.chat_message("user" if msg["role"] == "user" else "assistant"):
-        st.markdown(f"**{role_label}:** {msg['content']}")
+        if msg["role"] == "user":
+            st.markdown(render_user_line(msg["content"]))
+        else:
+            st.markdown(f"**🧬 HELIX:** {msg['content']}")
 
 user_input: str | None = st.chat_input("Speak or type, Sir...")
 
 if user_input:
-    logger.info(f"User input: {user_input[:100]}")
-    append_message("user", user_input)
+    # FIX #3: the entire turn is wrapped so any unexpected exception (LLM
+    # error, DB hiccup, tool failure) surfaces as a friendly message instead
+    # of crashing the whole app for this user.
+    try:
+        logger.info(f"User input: {user_input[:100]}")
+        try:
+            append_message(session_id, "user", user_input)
+        except sqlite3.OperationalError as exc:
+            logger.error(f"Failed to save user message: {exc}")
+            st.warning("⚠️ Couldn't save your message right now, Sir — continuing anyway.")
 
-    with st.chat_message("user"):
-        st.markdown(f"**👤 SIR:** {user_input}")
+        with st.chat_message("user"):
+            st.markdown(render_user_line(user_input))
 
-    with st.chat_message("assistant"):
-        response: str | None = None
-        intent = detect_intent(user_input)
+        with st.chat_message("assistant"):
+            response: str | None = None
+            intent = detect_intent(user_input)
 
-        if intent:
-            logger.info(f"Routing to agent: {intent.type}")
+            if intent:
+                logger.info(f"Routing to agent: {intent.type}")
 
-            # ── TIME/DATE: answered directly by LLM — no web search ever ──────
-            if intent.type == IntentType.TIME_DATE:
-                logger.info("Time/date query — routing directly to LLM")
-                context = load_recent(limit=LLM_CONTEXT_LIMIT)
+                if intent.type == IntentType.TIME_DATE:
+                    logger.info("Time/date query — routing directly to LLM")
+                    context = load_recent(session_id, limit=LLM_CONTEXT_LIMIT)
+                    response_container = st.empty()
+                    response = stream_response(context, container=response_container)
+
+                elif intent.type == IntentType.CALCULATOR:
+                    expr = intent.payload.get("expression", user_input)
+                    result = calculate(expr)
+                    if result.success:
+                        response = f"🧮 **Result:** `{result.expression}` = **{result.result}**"
+                    else:
+                        response = f"I couldn't calculate that, Sir: {result.error}"
+
+                elif intent.type == IntentType.WEATHER:
+                    location = intent.payload.get("location", "London")
+                    with st.spinner(f"Fetching weather for {location}…"):
+                        weather = get_weather(location)
+                    if weather:
+                        response = weather.format_response()
+                    else:
+                        response = f"⚠️ Couldn't fetch weather for {location}, Sir."
+
+                elif intent.type == IntentType.NEWS:
+                    query = intent.payload.get("query", "latest")
+                    with st.spinner("Fetching latest headlines…"):
+                        news = get_news(query)
+                    if news.success:
+                        headlines = "\n".join(
+                            f"- {a.title} ({a.source})"
+                            for a in news.articles
+                        )
+                        context = load_recent(session_id, limit=LLM_CONTEXT_LIMIT)
+                        context_with_news = list(context) + [{
+                            "role": "user",
+                            "content": (
+                                f"Present these headlines as a clean numbered list. "
+                                f"Each item on its own line. Format: '1. Title — Source'. "
+                                f"No descriptions. No links. No extra text. Just the list.\n\n"
+                                f"{headlines}"
+                            ),
+                        }]
+                        response_container = st.empty()
+                        response = stream_response(context_with_news, container=response_container)
+                    else:
+                        response = news.format_response()
+
+                elif intent.type == IntentType.SEARCH:
+                    query = intent.payload.get("query", user_input)
+                    with st.spinner(f"Searching for '{query}'…"):
+                        search = web_search(query)
+                    if search.success:
+                        context = load_recent(session_id, limit=LLM_CONTEXT_LIMIT)
+                        search_context = "\n".join(
+                            r.clean_snippet(200) for r in search.results[:3]
+                        )
+                        context_with_search = list(context) + [{
+                            "role": "user",
+                            "content": (
+                                f"Based on this search data, answer in 1-2 SHORT sentences only: '{user_input}'\n\n"
+                                f"Search data:\n{search_context}"
+                            ),
+                        }]
+                        response_container = st.empty()
+                        response = stream_response(context_with_search, container=response_container)
+                    else:
+                        response = search.format_response(query)
+
+            # ── FALLBACK: LLM answers first; web search only if uncertain ─────
+            if response is None:
+                context = load_recent(session_id, limit=LLM_CONTEXT_LIMIT)
                 response_container = st.empty()
+                logger.info("No intent matched — LLM handling directly")
+
                 response = stream_response(context, container=response_container)
 
-            elif intent.type == IntentType.CALCULATOR:
-                expr = intent.payload.get("expression", user_input)
-                result = calculate(expr)
-                if result.success:
-                    response = f"🧮 **Result:** `{result.expression}` = **{result.result}**"
-                else:
-                    response = f"I couldn't calculate that, Sir: {result.error}"
+                if _needs_web_search(response):
+                    logger.info("LLM uncertain — triggering fallback web search")
+                    with st.spinner("🔎 Searching the web for more info…"):
+                        search = web_search(user_input)
+                    if search.success:
+                        search_context = "\n".join(
+                            r.clean_snippet(200) for r in search.results[:3]
+                        )
+                        response_container.empty()
+                        response_container2 = st.empty()
+                        context_with_search = list(context) + [{
+                            "role": "user",
+                            "content": (
+                                f"Use this web search data to answer: '{user_input}'\n\n"
+                                f"Search data:\n{search_context}\n\n"
+                                f"IMPORTANT RULES:\n"
+                                f"- Use ONLY what is explicitly stated in the search data. Do NOT guess.\n"
+                                f"- If a number/stat is mentioned, quote it exactly.\n"
+                                f"- If unclear, say 'I couldn't confirm the exact figure, Sir'.\n"
+                                f"- Be concise, Sir."
+                            ),
+                        }]
+                        response = stream_with_search_context(
+                            context, search_context, container=response_container2
+                        )
 
-            elif intent.type == IntentType.WEATHER:
-                location = intent.payload.get("location", "London")
-                with st.spinner(f"Fetching weather for {location}…"):
-                    weather = get_weather(location)
-                if weather:
-                    response = weather.format_response()
-                else:
-                    response = f"⚠️ Couldn't fetch weather for {location}, Sir."
+            if response:
+                try:
+                    append_message(session_id, "assistant", response)
+                    logger.info(f"Response saved ({len(response)} chars)")
+                except sqlite3.OperationalError as exc:
+                    logger.error(f"Failed to save assistant response: {exc}")
+                    st.warning("⚠️ Response wasn't saved to memory, Sir, but here it is above.")
 
-            elif intent.type == IntentType.NEWS:
-                query = intent.payload.get("query", "latest")
-                with st.spinner("Fetching latest headlines…"):
-                    news = get_news(query)
-                if news.success:
-                    headlines = "\n".join(
-                        f"- {a.title} ({a.source})"
-                        for a in news.articles
-                    )
-                    context = load_recent(limit=LLM_CONTEXT_LIMIT)
-                    context_with_news = list(context) + [{
-                        "role": "user",
-                        "content": (
-                            f"Present these headlines as a clean numbered list. "
-                            f"Each item on its own line. Format: '1. Title — Source'. "
-                            f"No descriptions. No links. No extra text. Just the list.\n\n"
-                            f"{headlines}"
-                        ),
-                    }]
-                    response_container = st.empty()
-                    response = stream_response(context_with_news, container=response_container)
-                else:
-                    response = news.format_response()
+        # FIX #7: no unconditional st.rerun() here. The user + assistant
+        # messages are already rendered above via st.chat_message, so a full
+        # script rerun (which would re-open the DB and re-render everything
+        # from scratch) is unnecessary for the common chat path. This halves
+        # DB reads per turn and avoids a visible re-render flash.
 
-            elif intent.type == IntentType.SEARCH:
-                query = intent.payload.get("query", user_input)
-                with st.spinner(f"Searching for '{query}'…"):
-                    search = web_search(query)
-                if search.success:
-                    context = load_recent(limit=LLM_CONTEXT_LIMIT)
-                    search_context = "\n".join(
-                        r.clean_snippet(200) for r in search.results[:3]
-                    )
-                    context_with_search = list(context) + [{
-                        "role": "user",
-                        "content": (
-                            f"Based on this search data, answer in 1-2 SHORT sentences only: '{user_input}'\n\n"
-                            f"Search data:\n{search_context}"
-                        ),
-                    }]
-                    response_container = st.empty()
-                    response = stream_response(context_with_search, container=response_container)
-                else:
-                    response = search.format_response(query)
-
-        # ── FALLBACK: LLM answers first; web search only if uncertain ─────────
-        if response is None:
-            context = load_recent(limit=LLM_CONTEXT_LIMIT)
-            response_container = st.empty()
-            logger.info("No intent matched — LLM handling directly")
-
-            # Step 1: Let the LLM try first
-            response = stream_response(context, container=response_container)
-
-            # Step 2: Only web search if LLM admits uncertainty
-            if _needs_web_search(response):
-                logger.info("LLM uncertain — triggering fallback web search")
-                with st.spinner("🔎 Searching the web for more info…"):
-                    search = web_search(user_input)
-                if search.success:
-                    search_context = "\n".join(
-                        r.clean_snippet(200) for r in search.results[:3]
-                    )
-                    response_container.empty()
-                    response_container2 = st.empty()
-                    context_with_search = list(context) + [{
-                        "role": "user",
-                        "content": (
-                            f"Use this web search data to answer: '{user_input}'\n\n"
-                            f"Search data:\n{search_context}\n\n"
-                            f"IMPORTANT RULES:\n"
-                            f"- Use ONLY what is explicitly stated in the search data. Do NOT guess.\n"
-                            f"- If a number/stat is mentioned, quote it exactly.\n"
-                            f"- If unclear, say 'I couldn't confirm the exact figure, Sir'.\n"
-                            f"- Be concise, Sir."
-                        ),
-                    }]
-                    response = stream_with_search_context(
-                        context, search_context, container=response_container2
-                    )
-
-        if response:
-            append_message("assistant", response)
-            logger.info(f"Response saved ({len(response)} chars)")
-
-    st.rerun()
+    except Exception as exc:
+        logger.error(f"Unhandled error while processing user turn: {exc}", exc_info=True)
+        st.error(
+            "⚠️ Something went wrong while processing that, Sir. "
+            "Please try again — if it keeps happening, try clearing memory from the sidebar."
+        )
