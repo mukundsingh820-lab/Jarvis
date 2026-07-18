@@ -1,7 +1,6 @@
-streamlit
-groq
-httpx[http2]
-python-dotenv
-pytz
-psutil
-streamlit-mic-recorder
+streamlit==1.38.0
+groq==0.11.0
+httpx[http2]==0.27.2
+psutil==6.0.0
+pytz==2024.1
+python-dotenv==1.0.1
