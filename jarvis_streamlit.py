@@ -2436,4 +2436,153 @@ with st.sidebar:
 st.session_state.setdefault("history_show_count", DISPLAY_HISTORY_INITIAL)
 
 try:
-    histor
+    history = load_recent(session_id, limit=st.session_state.get("history_show_count", DISPLAY_HISTORY_INITIAL))
+    total_message_count = message_count(session_id)
+except Exception as exc:
+    logger.error(f"Failed to load chat history: {exc}")
+    st.error("⚠️ Couldn't load your chat history right now, Sir. Starting fresh for this view.")
+    history = []
+    total_message_count = 0
+
+if total_message_count > len(history):
+    remaining = total_message_count - len(history)
+    if st.button(f"⬆️ Load {min(remaining, DISPLAY_HISTORY_LIMIT)} earlier messages", use_container_width=True):
+        current_count = st.session_state.get("history_show_count", DISPLAY_HISTORY_INITIAL)
+        st.session_state.history_show_count = min(current_count + DISPLAY_HISTORY_LIMIT, total_message_count)
+        st.rerun()  # needed: pulling in more history changes what's rendered above
+
+for i, msg in enumerate(history):
+    with st.chat_message("user" if msg["role"] == "user" else "assistant"):
+        if msg["role"] == "user":
+            st.markdown(render_user_line(msg["content"]))
+        else:
+            st.markdown(f"**🧬 HELIX:** {msg['content']}")
+            render_copy_button(msg["content"], key=f"hist_{i}")
+            if st.button("🔊 Read aloud", key=f"speak_hist_{i}"):
+                with st.spinner("🔊 Generating audio, Sir…"):
+                    audio_bytes = generate_speech(msg["content"])
+                if audio_bytes:
+                    st.audio(audio_bytes, format="audio/wav", autoplay=True)
+
+with st.expander("🎙️ Speak instead of typing, Sir"):
+    audio_value = st.audio_input("Record a voice message")
+
+with st.expander("🖼️ Attach an image, Sir"):
+    uploaded_image = st.file_uploader(
+        "Upload an image to analyze", type=["png", "jpg", "jpeg", "webp"], key="image_uploader"
+    )
+    if uploaded_image is not None:
+        image_bytes_check = uploaded_image.getvalue()
+        if len(image_bytes_check) > MAX_IMAGE_BYTES:
+            st.warning(f"⚠️ That image is over {MAX_IMAGE_BYTES // (1024*1024)}MB, Sir — please use a smaller one.")
+        else:
+            image_hash = hashlib.md5(image_bytes_check).hexdigest()
+            if st.session_state.get("current_image_hash") != image_hash:
+                st.session_state.current_image_hash = image_hash
+                st.session_state.current_image_bytes = image_bytes_check
+                st.session_state.current_image_mime = uploaded_image.type or "image/png"
+    if st.session_state.get("current_image_bytes"):
+        st.image(st.session_state.get("current_image_bytes"), caption="Attached — ask a question below", width=200)
+        if st.button("🗑️ Remove image", use_container_width=True):
+            for key in ("current_image_bytes", "current_image_mime", "current_image_hash"):
+                st.session_state.pop(key, None)
+            st.rerun()
+
+voice_text: str | None = None
+if audio_value is not None:
+    audio_bytes = audio_value.getvalue()
+    audio_hash = hashlib.md5(audio_bytes).hexdigest()
+    # Guard against re-transcribing the same recording on every Streamlit
+    # rerun — st.audio_input keeps returning the last recording until a new
+    # one is made, so we only act on genuinely new audio.
+    if st.session_state.get("last_audio_hash") != audio_hash:
+        st.session_state.last_audio_hash = audio_hash
+        with st.spinner("🎙️ Transcribing, Sir…"):
+            voice_text = transcribe_audio(audio_bytes)
+
+typed_input: str | None = st.chat_input("Speak or type, Sir...")
+
+# Either the typed box or a fresh voice recording can trigger a turn — typed
+# input takes priority if somehow both arrive in the same rerun.
+user_input: str | None = typed_input or voice_text
+
+if user_input:
+    # FIX #3: the entire turn is wrapped so any unexpected exception (LLM
+    # error, DB hiccup, tool failure) surfaces as a friendly message instead
+    # of crashing the whole app for this user.
+    try:
+        logger.info(f"User input: {user_input[:100]}")
+        has_image = bool(st.session_state.get("current_image_bytes"))
+        stored_text = f"🖼️ [Image attached] {user_input}" if has_image else user_input
+        try:
+            append_message(session_id, "user", stored_text)
+        except sqlite3.OperationalError as exc:
+            logger.error(f"Failed to save user message: {exc}")
+            st.warning("⚠️ Couldn't save your message right now, Sir — continuing anyway.")
+
+        with st.chat_message("user"):
+            st.markdown(render_user_line(stored_text))
+
+        with st.chat_message("assistant"):
+            response: str | None = None
+            intent = detect_intent(user_input)
+
+            # Image attached: route straight to the vision model, bypassing
+            # both the time/date fast path and the tool orchestrator — an
+            # attached image is an unambiguous signal of what's needed.
+            if has_image:
+                logger.info("Image attached — routing to vision analysis")
+                response_container = st.empty()
+                response_container.markdown(render_thinking_indicator("Analyzing image"), unsafe_allow_html=True)
+                b64_image = base64.b64encode(st.session_state.get("current_image_bytes")).decode("utf-8")
+                data_uri = f"data:{st.session_state.get('current_image_mime', 'image/png')};base64,{b64_image}"
+                response = analyze_image(data_uri, user_input)
+                response_container.markdown(response)
+
+            # Fast path: pure time/date questions never need a tool, so skip
+            # the orchestrator's planning round-trip entirely.
+            elif intent and intent.type == IntentType.TIME_DATE:
+                logger.info("Time/date query — routing directly to LLM (fast path)")
+                context = load_recent(session_id, limit=LLM_CONTEXT_LIMIT)
+                response_container = st.empty()
+                response_container.markdown(render_thinking_indicator("Thinking"), unsafe_allow_html=True)
+                response = stream_response(context, container=response_container)
+            else:
+                # Everything else — including compound requests that need
+                # more than one tool (e.g. "weather in Delhi and calculate a
+                # 15% tip on 2000") — goes through the multi-step orchestrator,
+                # which lets the model plan, chain, and execute tools itself
+                # instead of a single regex-picked intent.
+                logger.info("Routing to orchestrator")
+                context = load_recent(session_id, limit=LLM_CONTEXT_LIMIT)
+                response_container = st.empty()
+                response_container.markdown(render_thinking_indicator("Orchestrating"), unsafe_allow_html=True)
+                response = run_orchestrator(context, container=response_container)
+
+            if response:
+                live_key_suffix = f"{session_id[:8]}_{int(time.time()*1000)}"
+                render_copy_button(response, key=f"live_{live_key_suffix}")
+                if st.button("🔊 Read aloud", key=f"speak_live_{live_key_suffix}"):
+                    with st.spinner("🔊 Generating audio, Sir…"):
+                        audio_bytes = generate_speech(response)
+                    if audio_bytes:
+                        st.audio(audio_bytes, format="audio/wav", autoplay=True)
+                try:
+                    append_message(session_id, "assistant", response)
+                    logger.info(f"Response saved ({len(response)} chars)")
+                except sqlite3.OperationalError as exc:
+                    logger.error(f"Failed to save assistant response: {exc}")
+                    st.warning("⚠️ Response wasn't saved to memory, Sir, but here it is above.")
+
+        # FIX #7: no unconditional st.rerun() here. The user + assistant
+        # messages are already rendered above via st.chat_message, so a full
+        # script rerun (which would re-open the DB and re-render everything
+        # from scratch) is unnecessary for the common chat path. This halves
+        # DB reads per turn and avoids a visible re-render flash.
+
+    except Exception as exc:
+        logger.error(f"Unhandled error while processing user turn: {exc}", exc_info=True)
+        st.error(
+            "⚠️ Something went wrong while processing that, Sir. "
+            "Please try again — if it keeps happening, try clearing memory from the sidebar."
+        )
