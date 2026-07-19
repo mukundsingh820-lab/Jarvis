@@ -2320,23 +2320,21 @@ if not GROQ_API_KEY:
     st.stop()
 
 # FIX #1: one stable, private session id per browser tab/session.
-if "session_id" not in st.session_state:
-    st.session_state.session_id = str(uuid.uuid4())
-session_id: str = st.session_state.session_id
+st.session_state.setdefault("session_id", str(uuid.uuid4()))
+session_id: str = st.session_state.get("session_id")
 
-if "dark_mode" not in st.session_state:
-    st.session_state.dark_mode = True
+st.session_state.setdefault("dark_mode", True)
 
-theme_name = "dark" if st.session_state.dark_mode else "light"
+theme_name = "dark" if st.session_state.get("dark_mode", True) else "light"
 accent = THEMES[theme_name]["accent"]
 
 inject_styles(theme_name)
 render_header(accent)
 
 with st.sidebar:
-    mode_label = "☀️ Light Mode" if st.session_state.dark_mode else "🌙 Dark Mode"
+    mode_label = "☀️ Light Mode" if st.session_state.get("dark_mode", True) else "🌙 Dark Mode"
     if st.button(mode_label, use_container_width=True):
-        st.session_state.dark_mode = not st.session_state.dark_mode
+        st.session_state.dark_mode = not st.session_state.get("dark_mode", True)
         st.rerun()  # needed: whole page restyles, so a full rerun is correct here
     st.divider()
     st.markdown("### ⚙️ SYSTEM STATUS")
@@ -2435,5 +2433,7 @@ with st.sidebar:
 
 # FIX #3: any failure loading history shows a friendly message instead of a
 # raw traceback / crashed app.
-if "history_show_count" not in st.session_state:
-    st.session_state.hist
+st.session_state.setdefault("history_show_count", DISPLAY_HISTORY_INITIAL)
+
+try:
+    histor
