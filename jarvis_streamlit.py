@@ -26,7 +26,6 @@ import httpx
 import psutil
 import pytz
 import streamlit as st
-import streamlit.components.v1 as components
 from dotenv import load_dotenv
 from groq import Groq, RateLimitError, APIConnectionError, APIStatusError
 
@@ -2278,12 +2277,11 @@ def render_user_line(text: str) -> str:
 def render_copy_button(text: str, key: str) -> None:
     """
     A small 'copy to clipboard' button under an assistant message. Uses
-    components.html (its own sandboxed iframe with working JS) rather than
-    a <script> tag inside st.markdown, which Streamlit often strips.
+    st.iframe with srcdoc (its own sandboxed frame with working JS) rather
+    than a <script> tag inside st.markdown, which Streamlit often strips.
     """
     js_safe_text = json.dumps(text)  # safely escapes quotes/newlines for embedding in JS
-    components.html(
-        f"""
+    srcdoc = f"""
         <div style="display:flex; justify-content:flex-end; font-family:Inter,sans-serif;">
           <button id="copy-{key}" onclick='
             navigator.clipboard.writeText({js_safe_text});
@@ -2303,9 +2301,8 @@ def render_copy_button(text: str, key: str) -> None:
             📋 Copy
           </button>
         </div>
-        """,
-        height=32,
-    )
+        """
+    st.iframe(srcdoc=srcdoc, height=32, scrolling=False)
 
 # ── App ────────────────────────────────────────────────────────────────────────
 st.set_page_config(
