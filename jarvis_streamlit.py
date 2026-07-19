@@ -26,6 +26,7 @@ import httpx
 import psutil
 import pytz
 import streamlit as st
+import streamlit.components.v1 as components
 from dotenv import load_dotenv
 from groq import Groq, RateLimitError, APIConnectionError, APIStatusError
 
@@ -57,6 +58,7 @@ LLM_MAX_TOKENS: int = 1024
 LLM_TEMPERATURE: float = 0.7
 
 DISPLAY_HISTORY_LIMIT: int = 20
+DISPLAY_HISTORY_INITIAL: int = 8  # fast first paint — older messages load on demand
 LLM_CONTEXT_LIMIT: int = 20
 # Streamlit Cloud mounts the app's source folder read-only (/mount/src/...),
 # so the DB file must live in a writable location like /tmp instead.
@@ -1418,6 +1420,20 @@ def inject_styles(theme_name: str = "dark") -> None:
 
         @media (max-width: 768px) {{
             .main .block-container {{ padding: 4px 8px 140px 8px !important; }}
+            .helix-title {{ font-size: 32px !important; letter-spacing: 10px !important; }}
+            .helix-logo {{ font-size: 56px !important; }}
+            .helix-glass-card {{ padding: 16px 24px 18px 24px !important; }}
+            [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]),
+            [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"]) {{
+                margin-left: 4px !important;
+                margin-right: 4px !important;
+                padding: 11px 14px !important;
+            }}
+            [data-testid="stChatInputContainer"] textarea {{ font-size: 16px !important; }}
+        }}
+        @media (max-width: 420px) {{
+            .helix-title {{ font-size: 26px !important; letter-spacing: 6px !important; }}
+            .helix-tagline {{ font-size: 8px !important; letter-spacing: 2px !important; }}
         }}
 
         h1, h2, h3 {{
@@ -1889,6 +1905,44 @@ def inject_styles(theme_name: str = "dark") -> None:
         [data-testid="stChatMessage"] {{
             animation-fill-mode: both !important;
         }}
+
+        /* ── Smoother reruns: every full page rerun (including a theme
+           toggle) fades the whole app in rather than hard-cutting ── */
+        .stApp {{
+            animation: appFadeIn 0.45s ease !important;
+        }}
+        @keyframes appFadeIn {{
+            0%   {{ opacity: 0; }}
+            100% {{ opacity: 1; }}
+        }}
+
+        /* ── Assistant bubbles get a brief glow pulse right as they land,
+           echoing the "still working" feel into the settled message ── */
+        [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"]) {{
+            animation: liquidBounceLeft 0.5s cubic-bezier(0.34,1.56,0.64,1) both,
+                       streamGlow 1.8s ease-out both !important;
+        }}
+        @keyframes streamGlow {{
+            0%   {{ box-shadow: 0 0 0 rgba(0,0,0,0), 0 8px 32px rgba(0,0,0,0.22); }}
+            35%  {{ box-shadow: 0 0 34px {t['accent3']}33, 0 8px 32px rgba(0,0,0,0.22); }}
+            100% {{ box-shadow: 0 0 0 rgba(0,0,0,0), 0 8px 32px rgba(0,0,0,0.22); }}
+        }}
+
+        /* ── Glass-themed alert boxes (st.error / st.warning / st.info)
+           instead of Streamlit's flat default red/yellow/blue ── */
+        [data-testid="stAlert"] {{
+            background: linear-gradient(135deg, rgba(255,255,255,0.09) 0%, rgba(255,255,255,0.03) 100%) !important;
+            backdrop-filter: blur(30px) saturate(180%) !important;
+            -webkit-backdrop-filter: blur(30px) saturate(180%) !important;
+            border: 1px solid rgba(255,255,255,0.16) !important;
+            border-left: 3px solid {t['gold']} !important;
+            border-radius: 16px !important;
+            color: {t['text']} !important;
+            box-shadow: 0 6px 24px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.08) !important;
+        }}
+        [data-testid="stAlert"] * {{
+            color: {t['text']} !important;
+        }}
     </style>
     """, unsafe_allow_html=True)
 
@@ -1928,6 +1982,38 @@ def render_user_line(text: str) -> str:
     it's LLM-generated markdown (bold, links) that we intentionally render.
     """
     return f"**👤 SIR:** {html.escape(text)}"
+
+def render_copy_button(text: str, key: str) -> None:
+    """
+    A small 'copy to clipboard' button under an assistant message. Uses
+    components.html (its own sandboxed iframe with working JS) rather than
+    a <script> tag inside st.markdown, which Streamlit often strips.
+    """
+    js_safe_text = json.dumps(text)  # safely escapes quotes/newlines for embedding in JS
+    components.html(
+        f"""
+        <div style="display:flex; justify-content:flex-end; font-family:Inter,sans-serif;">
+          <button id="copy-{key}" onclick='
+            navigator.clipboard.writeText({js_safe_text});
+            document.getElementById("copy-{key}").innerText = "✅ Copied";
+            setTimeout(() => {{ document.getElementById("copy-{key}").innerText = "📋 Copy"; }}, 1400);
+          ' style="
+            background: rgba(255,255,255,0.07);
+            border: 1px solid rgba(255,255,255,0.15);
+            color: rgba(255,255,255,0.65);
+            border-radius: 10px;
+            padding: 3px 12px;
+            font-size: 11px;
+            cursor: pointer;
+            transition: background 0.2s ease;
+          " onmouseover="this.style.background='rgba(255,255,255,0.14)'"
+            onmouseout="this.style.background='rgba(255,255,255,0.07)'">
+            📋 Copy
+          </button>
+        </div>
+        """,
+        height=32,
+    )
 
 # ── App ────────────────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -1994,19 +2080,33 @@ with st.sidebar:
 
 # FIX #3: any failure loading history shows a friendly message instead of a
 # raw traceback / crashed app.
+if "history_show_count" not in st.session_state:
+    st.session_state.history_show_count = DISPLAY_HISTORY_INITIAL
+
 try:
-    history = load_recent(session_id, limit=DISPLAY_HISTORY_LIMIT)
+    history = load_recent(session_id, limit=st.session_state.history_show_count)
+    total_message_count = message_count(session_id)
 except Exception as exc:
     logger.error(f"Failed to load chat history: {exc}")
     st.error("⚠️ Couldn't load your chat history right now, Sir. Starting fresh for this view.")
     history = []
+    total_message_count = 0
 
-for msg in history:
+if total_message_count > len(history):
+    remaining = total_message_count - len(history)
+    if st.button(f"⬆️ Load {min(remaining, DISPLAY_HISTORY_LIMIT)} earlier messages", use_container_width=True):
+        st.session_state.history_show_count = min(
+            st.session_state.history_show_count + DISPLAY_HISTORY_LIMIT, total_message_count
+        )
+        st.rerun()  # needed: pulling in more history changes what's rendered above
+
+for i, msg in enumerate(history):
     with st.chat_message("user" if msg["role"] == "user" else "assistant"):
         if msg["role"] == "user":
             st.markdown(render_user_line(msg["content"]))
         else:
             st.markdown(f"**🧬 HELIX:** {msg['content']}")
+            render_copy_button(msg["content"], key=f"hist_{i}")
 
 with st.expander("🎙️ Speak instead of typing, Sir"):
     audio_value = st.audio_input("Record a voice message")
@@ -2104,6 +2204,7 @@ if user_input:
                 response = run_orchestrator(context, container=response_container)
 
             if response:
+                render_copy_button(response, key=f"live_{session_id[:8]}_{int(time.time()*1000)}")
                 try:
                     append_message(session_id, "assistant", response)
                     logger.info(f"Response saved ({len(response)} chars)")
