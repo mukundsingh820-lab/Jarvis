@@ -714,6 +714,29 @@ _CREATE_INDEX = """
 CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, id);
 """
 
+# Long-term memory: keyed by profile_id (derived from an optional user-chosen
+# "memory key", not the per-browser session_id) so facts/reminders can be
+# recalled across visits — unlike `messages`, which resets every session.
+_CREATE_FACTS_TABLE = """
+CREATE TABLE IF NOT EXISTS facts (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    profile_id TEXT    NOT NULL,
+    fact       TEXT    NOT NULL,
+    ts         TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+"""
+_CREATE_FACTS_INDEX = "CREATE INDEX IF NOT EXISTS idx_facts_profile ON facts(profile_id, id);"
+
+_CREATE_REMINDERS_TABLE = """
+CREATE TABLE IF NOT EXISTS reminders (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    profile_id TEXT    NOT NULL,
+    text       TEXT    NOT NULL,
+    ts         TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+"""
+_CREATE_REMINDERS_INDEX = "CREATE INDEX IF NOT EXISTS idx_reminders_profile ON reminders(profile_id, id);"
+
 _CURRENT_SCHEMA_VERSION = 2
 
 @contextmanager
@@ -726,6 +749,10 @@ def _db() -> Generator[sqlite3.Connection, None, None]:
     try:
         conn.execute(_CREATE_TABLE)
         conn.execute(_CREATE_INDEX)
+        conn.execute(_CREATE_FACTS_TABLE)
+        conn.execute(_CREATE_FACTS_INDEX)
+        conn.execute(_CREATE_REMINDERS_TABLE)
+        conn.execute(_CREATE_REMINDERS_INDEX)
         conn.commit()
         yield conn
     except sqlite3.Error as exc:
@@ -783,6 +810,59 @@ def message_count(session_id: str) -> int:
         return conn.execute(
             "SELECT COUNT(*) FROM messages WHERE session_id = ?", (session_id,)
         ).fetchone()[0]
+
+# ── Long-term memory (facts + reminders) ────────────────────────────────────────
+@with_retry(max_attempts=4, base_delay=0.25, max_delay=2.0, exceptions=(sqlite3.OperationalError,))
+def save_fact(profile_id: str, fact: str) -> None:
+    fact = fact.strip()[:300]
+    if not fact:
+        return
+    with _db() as conn:
+        conn.execute("INSERT INTO facts (profile_id, fact) VALUES (?, ?)", (profile_id, fact))
+        conn.commit()
+    logger.info(f"Saved fact for profile {profile_id[:8]}: '{fact[:60]}'")
+
+@with_retry(max_attempts=4, base_delay=0.25, max_delay=2.0, exceptions=(sqlite3.OperationalError,))
+def load_facts(profile_id: str, limit: int = 15) -> list[str]:
+    with _db() as conn:
+        rows = conn.execute(
+            "SELECT fact FROM facts WHERE profile_id = ? ORDER BY id DESC LIMIT ?",
+            (profile_id, limit),
+        ).fetchall()
+    return [r["fact"] for r in reversed(rows)]
+
+@with_retry(max_attempts=4, base_delay=0.25, max_delay=2.0, exceptions=(sqlite3.OperationalError,))
+def clear_facts(profile_id: str) -> None:
+    with _db() as conn:
+        conn.execute("DELETE FROM facts WHERE profile_id = ?", (profile_id,))
+        conn.commit()
+    logger.info(f"Cleared facts for profile {profile_id[:8]}")
+
+@with_retry(max_attempts=4, base_delay=0.25, max_delay=2.0, exceptions=(sqlite3.OperationalError,))
+def save_reminder(profile_id: str, text: str) -> None:
+    text = text.strip()[:300]
+    if not text:
+        return
+    with _db() as conn:
+        conn.execute("INSERT INTO reminders (profile_id, text) VALUES (?, ?)", (profile_id, text))
+        conn.commit()
+    logger.info(f"Saved reminder for profile {profile_id[:8]}: '{text[:60]}'")
+
+@with_retry(max_attempts=4, base_delay=0.25, max_delay=2.0, exceptions=(sqlite3.OperationalError,))
+def load_reminders(profile_id: str, limit: int = 15) -> list[str]:
+    with _db() as conn:
+        rows = conn.execute(
+            "SELECT text FROM reminders WHERE profile_id = ? ORDER BY id DESC LIMIT ?",
+            (profile_id, limit),
+        ).fetchall()
+    return [r["text"] for r in reversed(rows)]
+
+@with_retry(max_attempts=4, base_delay=0.25, max_delay=2.0, exceptions=(sqlite3.OperationalError,))
+def clear_reminders(profile_id: str) -> None:
+    with _db() as conn:
+        conn.execute("DELETE FROM reminders WHERE profile_id = ?", (profile_id,))
+        conn.commit()
+    logger.info(f"Cleared reminders for profile {profile_id[:8]}")
 
 # ── Intent Detection ───────────────────────────────────────────────────────────
 class IntentType(str, Enum):
@@ -955,6 +1035,41 @@ def transcribe_audio(audio_bytes: bytes) -> str | None:
         st.warning("⚠️ Couldn't transcribe that recording, Sir — please try again or type instead.")
         return None
 
+TTS_MODEL: str = "canopylabs/orpheus-v1-english"
+TTS_VOICE: str = "troy"
+TTS_MAX_CHARS: int = 200  # hard limit imposed by Groq's Orpheus TTS endpoint
+
+def generate_speech(text: str) -> bytes | None:
+    """
+    Converts text to spoken audio via Groq's free Orpheus TTS model, Sir.
+    NOTE: Orpheus caps input at 200 characters per request, so longer
+    responses are truncated to a spoken preview rather than read in full.
+    """
+    if not _groq_client:
+        st.warning("❌ GROQ_API_KEY is not configured, Sir — voice output unavailable.")
+        return None
+    spoken_text = text.strip()
+    if len(spoken_text) > TTS_MAX_CHARS:
+        spoken_text = spoken_text[: TTS_MAX_CHARS - 3].rsplit(" ", 1)[0] + "..."
+    if not spoken_text:
+        return None
+    try:
+        logger.info(f"Generating speech ({len(spoken_text)} chars) via {TTS_MODEL}")
+        response = _groq_client.audio.speech.create(
+            model=TTS_MODEL,
+            voice=TTS_VOICE,
+            input=spoken_text,
+            response_format="wav",
+        )
+        return response.read() if hasattr(response, "read") else response.content
+    except RateLimitError:
+        st.warning("⚠️ Voice output rate limited, Sir — please try again shortly.")
+        return None
+    except Exception as exc:
+        logger.error(f"TTS generation failed: {exc}")
+        st.warning("⚠️ Couldn't generate audio for that, Sir.")
+        return None
+
 def analyze_image(image_data_uri: str, user_text: str) -> str:
     """
     Sends an uploaded image (as a base64 data URI) plus the user's question
@@ -1003,7 +1118,19 @@ def analyze_image(image_data_uri: str, user_text: str) -> str:
 
 def _build_system_prompt() -> str:
     current_time = datetime.now(IST).strftime("%A, %d %B %Y, %I:%M %p")
-    return SYSTEM_PROMPT_TEMPLATE.format(current_time=current_time)
+    base = SYSTEM_PROMPT_TEMPLATE.format(current_time=current_time)
+
+    facts = st.session_state.get("active_profile_facts", [])
+    reminders = st.session_state.get("active_profile_reminders", [])
+    if facts:
+        base += "\n\nThings you remember about this user from earlier, Sir:\n" + "\n".join(
+            f"- {f}" for f in facts
+        )
+    if reminders:
+        base += "\n\nThings this user asked you to remind them of:\n" + "\n".join(
+            f"- {r}" for r in reminders
+        )
+    return base
 
 def _get_active_model_index() -> int:
     return st.session_state.get(_MODEL_STATE_KEY, 0)
@@ -1156,6 +1283,79 @@ ORCHESTRATOR_TOOLS: list[dict] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "remember_fact",
+            "description": (
+                "Store a fact about the user for future conversations — use ONLY when the "
+                "user explicitly asks you to remember something about them (e.g. 'remember "
+                "that I'm vegetarian', 'note that my flight is on Friday')."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "fact": {
+                        "type": "string",
+                        "description": "The fact to remember, written in third person, e.g. 'Prefers vegetarian food.'",
+                    }
+                },
+                "required": ["fact"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "add_reminder",
+            "description": (
+                "Save something the user wants to be reminded of. NOTE: this does NOT send "
+                "a real-time alert or notification later — it only lets HELIX recall the item "
+                "when the user asks 'what are my reminders' in a future conversation. Say this "
+                "limitation plainly if the user seems to expect a real alarm."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {"text": {"type": "string", "description": "The reminder text"}},
+                "required": ["text"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "convert_currency",
+            "description": "Convert an amount from one currency to another using current exchange rates.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "amount": {"type": "number", "description": "The amount to convert"},
+                    "from_currency": {"type": "string", "description": "3-letter currency code, e.g. USD"},
+                    "to_currency": {"type": "string", "description": "3-letter currency code, e.g. INR"},
+                },
+                "required": ["amount", "from_currency", "to_currency"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "convert_units",
+            "description": (
+                "Convert a value between common units: length (m, km, mi, ft, in, cm), "
+                "weight (kg, g, lb, oz), or temperature (c, f, k)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "value": {"type": "number", "description": "The numeric value to convert"},
+                    "from_unit": {"type": "string", "description": "Source unit, e.g. 'km', 'lb', 'c'"},
+                    "to_unit": {"type": "string", "description": "Target unit, e.g. 'mi', 'kg', 'f'"},
+                },
+                "required": ["value", "from_unit", "to_unit"],
+            },
+        },
+    },
 ]
 
 def _safe_json_loads(raw: str | None) -> dict:
@@ -1166,6 +1366,66 @@ def _safe_json_loads(raw: str | None) -> dict:
         return parsed if isinstance(parsed, dict) else {}
     except (json.JSONDecodeError, TypeError):
         return {}
+
+@dataclass
+class CurrencyResult:
+    success: bool
+    text: str
+
+@st.cache_data(ttl=3600, show_spinner=False)  # exchange rates don't need to be re-fetched every minute
+def convert_currency(amount: float, from_currency: str, to_currency: str) -> CurrencyResult:
+    from_cur = from_currency.strip().upper()[:3]
+    to_cur = to_currency.strip().upper()[:3]
+    try:
+        resp = http.get(f"https://api.frankfurter.app/latest?amount={amount}&from={from_cur}&to={to_cur}")
+        resp.raise_for_status()
+        data = resp.json()
+        rates = data.get("rates", {})
+        if to_cur not in rates:
+            return CurrencyResult(success=False, text=f"Couldn't find a rate for {from_cur} → {to_cur}.")
+        converted = rates[to_cur]
+        return CurrencyResult(success=True, text=f"{amount} {from_cur} = {converted:.2f} {to_cur}")
+    except Exception as exc:
+        logger.error(f"Currency conversion failed ({from_cur}->{to_cur}): {exc}")
+        return CurrencyResult(success=False, text=f"Currency conversion failed, Sir: {exc}")
+
+_UNIT_TO_METERS: dict[str, float] = {"m": 1.0, "km": 1000.0, "mi": 1609.344, "ft": 0.3048, "in": 0.0254, "cm": 0.01}
+_UNIT_TO_KG: dict[str, float] = {"kg": 1.0, "g": 0.001, "lb": 0.453592, "oz": 0.0283495}
+
+def convert_units(value: float, from_unit: str, to_unit: str) -> str:
+    f_unit = from_unit.strip().lower()
+    t_unit = to_unit.strip().lower()
+    try:
+        if f_unit in ("c", "f", "k") and t_unit in ("c", "f", "k"):
+            # Normalize to Celsius first, then to target.
+            if f_unit == "c":
+                celsius = value
+            elif f_unit == "f":
+                celsius = (value - 32) * 5 / 9
+            else:  # kelvin
+                celsius = value - 273.15
+            if t_unit == "c":
+                result = celsius
+            elif t_unit == "f":
+                result = celsius * 9 / 5 + 32
+            else:
+                result = celsius + 273.15
+            return f"{value}°{f_unit.upper()} = {round(result, 2)}°{t_unit.upper()}"
+
+        if f_unit in _UNIT_TO_METERS and t_unit in _UNIT_TO_METERS:
+            meters = value * _UNIT_TO_METERS[f_unit]
+            result = meters / _UNIT_TO_METERS[t_unit]
+            return f"{value} {f_unit} = {round(result, 4)} {t_unit}"
+
+        if f_unit in _UNIT_TO_KG and t_unit in _UNIT_TO_KG:
+            kg = value * _UNIT_TO_KG[f_unit]
+            result = kg / _UNIT_TO_KG[t_unit]
+            return f"{value} {f_unit} = {round(result, 4)} {t_unit}"
+
+        return f"Unsupported unit conversion: '{from_unit}' → '{to_unit}'."
+    except Exception as exc:
+        logger.error(f"Unit conversion failed ({from_unit}->{to_unit}): {exc}")
+        return f"Unit conversion failed, Sir: {exc}"
 
 def _execute_tool(name: str, args: dict) -> str:
     """Runs one tool call and returns a compact text result to feed back to the LLM."""
@@ -1199,6 +1459,33 @@ def _execute_tool(name: str, args: dict) -> str:
                     lines.append(f"{snippet}{source_tag}")
                 return "\n".join(lines)
             return search.error or "No results found."
+
+        if name == "remember_fact":
+            fact = args.get("fact", "").strip()
+            if not fact:
+                return "No fact provided to remember."
+            profile_id = st.session_state.get("active_profile_id", "anonymous")
+            save_fact(profile_id, fact)
+            # Keep the in-memory copy used for this turn's system prompt in sync.
+            st.session_state.setdefault("active_profile_facts", []).append(fact)
+            return f"Remembered: {fact}"
+
+        if name == "add_reminder":
+            text = args.get("text", "").strip()
+            if not text:
+                return "No reminder text provided."
+            profile_id = st.session_state.get("active_profile_id", "anonymous")
+            save_reminder(profile_id, text)
+            st.session_state.setdefault("active_profile_reminders", []).append(text)
+            return f"Saved reminder: {text} (Note: this can only be recalled when asked, not delivered as a live alert.)"
+
+        if name == "convert_currency":
+            amount = args.get("amount", 0)
+            result = convert_currency(float(amount), args.get("from_currency", "USD"), args.get("to_currency", "USD"))
+            return result.text
+
+        if name == "convert_units":
+            return convert_units(float(args.get("value", 0)), args.get("from_unit", ""), args.get("to_unit", ""))
 
         return f"Unknown tool requested: {name}"
     except Exception as exc:
@@ -1263,7 +1550,12 @@ def run_orchestrator(conversation: list[dict], container=None) -> str:
               "calculation). Only call a tool when the request genuinely needs it — for normal "
               "conversation, just reply directly with no tool calls. When you use web_search "
               "results, briefly cite the source name in your answer (e.g. 'according to Reuters...') "
-              "so the user knows where the information came from."
+              "so the user knows where the information came from. Use remember_fact only when the "
+              "user explicitly asks you to remember something about them. Use add_reminder when "
+              "they ask to be reminded of something, but always be clear this only lets you recall "
+              "it when they ask later — it is NOT a real alarm or notification. Use convert_currency "
+              "and convert_units for any currency or measurement conversions instead of estimating "
+              "them yourself."
         ),
     }]
     planning_messages.extend(conversation[-LLM_CONTEXT_LIMIT:])
@@ -2067,11 +2359,74 @@ with st.sidebar:
             st.error("⚠️ Couldn't clear memory right now, Sir — please try again.")
         st.rerun()  # needed: history list must disappear immediately
     st.divider()
+
+    st.markdown("### 🧠 LONG-TERM MEMORY")
+    st.caption(
+        "Set a memory key to let HELIX recall facts/reminders across visits — "
+        "just a shared phrase, not real login security. Leave blank to only "
+        "remember for this session."
+    )
+    memory_key = st.text_input("Memory key (optional)", type="password", key="memory_key_input")
+    if memory_key.strip():
+        active_profile_id = hashlib.sha256(f"helix_profile:{memory_key.strip()}".encode()).hexdigest()
+    else:
+        active_profile_id = session_id  # session-only: resets on a new tab/session
+    st.session_state.active_profile_id = active_profile_id
+
+    try:
+        st.session_state.active_profile_facts = load_facts(active_profile_id)
+        st.session_state.active_profile_reminders = load_reminders(active_profile_id)
+    except sqlite3.OperationalError:
+        st.session_state.setdefault("active_profile_facts", [])
+        st.session_state.setdefault("active_profile_reminders", [])
+        st.warning("⚠️ Couldn't load long-term memory right now, Sir.")
+
+    facts_now = st.session_state.get("active_profile_facts", [])
+    reminders_now = st.session_state.get("active_profile_reminders", [])
+    if facts_now:
+        with st.expander(f"📋 {len(facts_now)} remembered fact(s)"):
+            for f in facts_now:
+                st.write(f"• {f}")
+            if st.button("🗑️ Forget all facts", use_container_width=True, key="forget_facts_btn"):
+                clear_facts(active_profile_id)
+                st.session_state.active_profile_facts = []
+                st.rerun()
+    if reminders_now:
+        with st.expander(f"⏰ {len(reminders_now)} reminder(s)"):
+            for r in reminders_now:
+                st.write(f"• {r}")
+            if st.button("🗑️ Clear reminders", use_container_width=True, key="clear_reminders_btn"):
+                clear_reminders(active_profile_id)
+                st.session_state.active_profile_reminders = []
+                st.rerun()
+    st.divider()
+
+    st.markdown("### 📄 EXPORT CHAT")
+    try:
+        export_history = load_recent(session_id, limit=1000)
+        transcript_lines = [
+            f"{'Sir' if m['role'] == 'user' else 'HELIX'}: {m['content']}" for m in export_history
+        ]
+        transcript_text = "\n\n".join(transcript_lines) if transcript_lines else "No messages yet."
+    except Exception:
+        transcript_text = "Couldn't load chat history for export, Sir."
+    st.download_button(
+        "⬇️ Download chat as .txt",
+        data=transcript_text,
+        file_name=f"helix_chat_{datetime.now(IST).strftime('%Y%m%d_%H%M')}.txt",
+        mime="text/plain",
+        use_container_width=True,
+    )
+    st.divider()
+
     st.markdown("### 🛠️ FEATURES")
     st.markdown(
         "🧠 **Orchestrator** — Plans & chains tools in one turn\n\n"
         "🖼️ **Image Analysis** — Attach an image and ask about it\n\n"
         "🎙️ **Voice Input** — Speak instead of typing\n\n"
+        "🔊 **Voice Output** — Read responses aloud (Sir)\n\n"
+        "🧠 **Long-Term Memory** — Remember facts/reminders across visits\n\n"
+        "💱 **Currency & Unit Conversion** — Built into the orchestrator\n\n"
         "🌤️ **Weather** — Ask about weather\n\n"
         "🗞️ **News** — Get latest headlines\n\n"
         "🔍 **Web Search** — Search the web\n\n"
@@ -2081,146 +2436,4 @@ with st.sidebar:
 # FIX #3: any failure loading history shows a friendly message instead of a
 # raw traceback / crashed app.
 if "history_show_count" not in st.session_state:
-    st.session_state.history_show_count = DISPLAY_HISTORY_INITIAL
-
-try:
-    history = load_recent(session_id, limit=st.session_state.history_show_count)
-    total_message_count = message_count(session_id)
-except Exception as exc:
-    logger.error(f"Failed to load chat history: {exc}")
-    st.error("⚠️ Couldn't load your chat history right now, Sir. Starting fresh for this view.")
-    history = []
-    total_message_count = 0
-
-if total_message_count > len(history):
-    remaining = total_message_count - len(history)
-    if st.button(f"⬆️ Load {min(remaining, DISPLAY_HISTORY_LIMIT)} earlier messages", use_container_width=True):
-        st.session_state.history_show_count = min(
-            st.session_state.history_show_count + DISPLAY_HISTORY_LIMIT, total_message_count
-        )
-        st.rerun()  # needed: pulling in more history changes what's rendered above
-
-for i, msg in enumerate(history):
-    with st.chat_message("user" if msg["role"] == "user" else "assistant"):
-        if msg["role"] == "user":
-            st.markdown(render_user_line(msg["content"]))
-        else:
-            st.markdown(f"**🧬 HELIX:** {msg['content']}")
-            render_copy_button(msg["content"], key=f"hist_{i}")
-
-with st.expander("🎙️ Speak instead of typing, Sir"):
-    audio_value = st.audio_input("Record a voice message")
-
-with st.expander("🖼️ Attach an image, Sir"):
-    uploaded_image = st.file_uploader(
-        "Upload an image to analyze", type=["png", "jpg", "jpeg", "webp"], key="image_uploader"
-    )
-    if uploaded_image is not None:
-        image_bytes_check = uploaded_image.getvalue()
-        if len(image_bytes_check) > MAX_IMAGE_BYTES:
-            st.warning(f"⚠️ That image is over {MAX_IMAGE_BYTES // (1024*1024)}MB, Sir — please use a smaller one.")
-        else:
-            image_hash = hashlib.md5(image_bytes_check).hexdigest()
-            if st.session_state.get("current_image_hash") != image_hash:
-                st.session_state.current_image_hash = image_hash
-                st.session_state.current_image_bytes = image_bytes_check
-                st.session_state.current_image_mime = uploaded_image.type or "image/png"
-    if st.session_state.get("current_image_bytes"):
-        st.image(st.session_state.current_image_bytes, caption="Attached — ask a question below", width=200)
-        if st.button("🗑️ Remove image", use_container_width=True):
-            for key in ("current_image_bytes", "current_image_mime", "current_image_hash"):
-                st.session_state.pop(key, None)
-            st.rerun()
-
-voice_text: str | None = None
-if audio_value is not None:
-    audio_bytes = audio_value.getvalue()
-    audio_hash = hashlib.md5(audio_bytes).hexdigest()
-    # Guard against re-transcribing the same recording on every Streamlit
-    # rerun — st.audio_input keeps returning the last recording until a new
-    # one is made, so we only act on genuinely new audio.
-    if st.session_state.get("last_audio_hash") != audio_hash:
-        st.session_state.last_audio_hash = audio_hash
-        with st.spinner("🎙️ Transcribing, Sir…"):
-            voice_text = transcribe_audio(audio_bytes)
-
-typed_input: str | None = st.chat_input("Speak or type, Sir...")
-
-# Either the typed box or a fresh voice recording can trigger a turn — typed
-# input takes priority if somehow both arrive in the same rerun.
-user_input: str | None = typed_input or voice_text
-
-if user_input:
-    # FIX #3: the entire turn is wrapped so any unexpected exception (LLM
-    # error, DB hiccup, tool failure) surfaces as a friendly message instead
-    # of crashing the whole app for this user.
-    try:
-        logger.info(f"User input: {user_input[:100]}")
-        has_image = bool(st.session_state.get("current_image_bytes"))
-        stored_text = f"🖼️ [Image attached] {user_input}" if has_image else user_input
-        try:
-            append_message(session_id, "user", stored_text)
-        except sqlite3.OperationalError as exc:
-            logger.error(f"Failed to save user message: {exc}")
-            st.warning("⚠️ Couldn't save your message right now, Sir — continuing anyway.")
-
-        with st.chat_message("user"):
-            st.markdown(render_user_line(stored_text))
-
-        with st.chat_message("assistant"):
-            response: str | None = None
-            intent = detect_intent(user_input)
-
-            # Image attached: route straight to the vision model, bypassing
-            # both the time/date fast path and the tool orchestrator — an
-            # attached image is an unambiguous signal of what's needed.
-            if has_image:
-                logger.info("Image attached — routing to vision analysis")
-                response_container = st.empty()
-                response_container.markdown(render_thinking_indicator("Analyzing image"), unsafe_allow_html=True)
-                b64_image = base64.b64encode(st.session_state.current_image_bytes).decode("utf-8")
-                data_uri = f"data:{st.session_state.current_image_mime};base64,{b64_image}"
-                response = analyze_image(data_uri, user_input)
-                response_container.markdown(response)
-
-            # Fast path: pure time/date questions never need a tool, so skip
-            # the orchestrator's planning round-trip entirely.
-            elif intent and intent.type == IntentType.TIME_DATE:
-                logger.info("Time/date query — routing directly to LLM (fast path)")
-                context = load_recent(session_id, limit=LLM_CONTEXT_LIMIT)
-                response_container = st.empty()
-                response_container.markdown(render_thinking_indicator("Thinking"), unsafe_allow_html=True)
-                response = stream_response(context, container=response_container)
-            else:
-                # Everything else — including compound requests that need
-                # more than one tool (e.g. "weather in Delhi and calculate a
-                # 15% tip on 2000") — goes through the multi-step orchestrator,
-                # which lets the model plan, chain, and execute tools itself
-                # instead of a single regex-picked intent.
-                logger.info("Routing to orchestrator")
-                context = load_recent(session_id, limit=LLM_CONTEXT_LIMIT)
-                response_container = st.empty()
-                response_container.markdown(render_thinking_indicator("Orchestrating"), unsafe_allow_html=True)
-                response = run_orchestrator(context, container=response_container)
-
-            if response:
-                render_copy_button(response, key=f"live_{session_id[:8]}_{int(time.time()*1000)}")
-                try:
-                    append_message(session_id, "assistant", response)
-                    logger.info(f"Response saved ({len(response)} chars)")
-                except sqlite3.OperationalError as exc:
-                    logger.error(f"Failed to save assistant response: {exc}")
-                    st.warning("⚠️ Response wasn't saved to memory, Sir, but here it is above.")
-
-        # FIX #7: no unconditional st.rerun() here. The user + assistant
-        # messages are already rendered above via st.chat_message, so a full
-        # script rerun (which would re-open the DB and re-render everything
-        # from scratch) is unnecessary for the common chat path. This halves
-        # DB reads per turn and avoids a visible re-render flash.
-
-    except Exception as exc:
-        logger.error(f"Unhandled error while processing user turn: {exc}", exc_info=True)
-        st.error(
-            "⚠️ Something went wrong while processing that, Sir. "
-            "Please try again — if it keeps happening, try clearing memory from the sidebar."
-        )
+    st.session_state.hist
