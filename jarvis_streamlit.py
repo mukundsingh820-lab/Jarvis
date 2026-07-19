@@ -1,5 +1,6 @@
 # ── Imports ────────────────────────────────────────────────────────────────────
 import ast
+import base64
 import hashlib
 import html
 import json
@@ -43,6 +44,15 @@ GROQ_MODELS: list[str] = [
     "qwen/qwen3.6-27b",
     "llama-3.1-8b-instant",
 ]
+# NOTE: meta-llama/llama-4-scout-17b-16e-instruct (the older vision model) is
+# being deprecated by Groq — their own migration guidance points to
+# qwen/qwen3.6-27b (multimodal) instead, which is also already in
+# GROQ_MODELS above, so image analysis reuses the same reliable model.
+VISION_MODELS: list[str] = [
+    "qwen/qwen3.6-27b",
+    "meta-llama/llama-4-maverick-17b-128e-instruct",
+]
+MAX_IMAGE_BYTES: int = 8 * 1024 * 1024  # 8MB, comfortably under Groq's vision limit
 LLM_MAX_TOKENS: int = 1024
 LLM_TEMPERATURE: float = 0.7
 
@@ -942,6 +952,52 @@ def transcribe_audio(audio_bytes: bytes) -> str | None:
         logger.error(f"Whisper transcription failed: {exc}")
         st.warning("⚠️ Couldn't transcribe that recording, Sir — please try again or type instead.")
         return None
+
+def analyze_image(image_data_uri: str, user_text: str) -> str:
+    """
+    Sends an uploaded image (as a base64 data URI) plus the user's question
+    to a vision-capable Groq model, with fallback across VISION_MODELS.
+    """
+    if not _groq_client:
+        return "❌ GROQ_API_KEY is not configured, Sir."
+
+    prompt_text = user_text.strip() or "Describe what's in this image in detail, Sir."
+    messages = [
+        {"role": "system", "content": _build_system_prompt()},
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": prompt_text},
+                {"type": "image_url", "image_url": {"url": image_data_uri}},
+            ],
+        },
+    ]
+
+    last_error: Exception | None = None
+    for model_name in VISION_MODELS:
+        try:
+            logger.info(f"Vision call: model='{model_name}'")
+            resp = _groq_client.chat.completions.create(
+                model=model_name,
+                messages=messages,
+                max_tokens=LLM_MAX_TOKENS,
+                temperature=LLM_TEMPERATURE,
+            )
+            text = resp.choices[0].message.content or ""
+            if text.strip():
+                return text
+            logger.warning(f"Vision model '{model_name}' returned empty content; trying next")
+        except (RateLimitError, APIStatusError, APIConnectionError) as exc:
+            last_error = exc
+            logger.warning(f"Vision model '{model_name}' failed ({exc}); trying next")
+            continue
+        except Exception as exc:
+            last_error = exc
+            logger.error(f"Vision unexpected error on '{model_name}': {exc}")
+            continue
+
+    logger.error(f"All vision models exhausted. Last error: {last_error}")
+    return "⚠️ Image analysis is currently unavailable, Sir. Please try again shortly."
 
 def _build_system_prompt() -> str:
     current_time = datetime.now(IST).strftime("%A, %d %B %Y, %I:%M %p")
@@ -1928,6 +1984,8 @@ with st.sidebar:
     st.markdown("### 🛠️ FEATURES")
     st.markdown(
         "🧠 **Orchestrator** — Plans & chains tools in one turn\n\n"
+        "🖼️ **Image Analysis** — Attach an image and ask about it\n\n"
+        "🎙️ **Voice Input** — Speak instead of typing\n\n"
         "🌤️ **Weather** — Ask about weather\n\n"
         "🗞️ **News** — Get latest headlines\n\n"
         "🔍 **Web Search** — Search the web\n\n"
@@ -1953,6 +2011,27 @@ for msg in history:
 with st.expander("🎙️ Speak instead of typing, Sir"):
     audio_value = st.audio_input("Record a voice message")
 
+with st.expander("🖼️ Attach an image, Sir"):
+    uploaded_image = st.file_uploader(
+        "Upload an image to analyze", type=["png", "jpg", "jpeg", "webp"], key="image_uploader"
+    )
+    if uploaded_image is not None:
+        image_bytes_check = uploaded_image.getvalue()
+        if len(image_bytes_check) > MAX_IMAGE_BYTES:
+            st.warning(f"⚠️ That image is over {MAX_IMAGE_BYTES // (1024*1024)}MB, Sir — please use a smaller one.")
+        else:
+            image_hash = hashlib.md5(image_bytes_check).hexdigest()
+            if st.session_state.get("current_image_hash") != image_hash:
+                st.session_state.current_image_hash = image_hash
+                st.session_state.current_image_bytes = image_bytes_check
+                st.session_state.current_image_mime = uploaded_image.type or "image/png"
+    if st.session_state.get("current_image_bytes"):
+        st.image(st.session_state.current_image_bytes, caption="Attached — ask a question below", width=200)
+        if st.button("🗑️ Remove image", use_container_width=True):
+            for key in ("current_image_bytes", "current_image_mime", "current_image_hash"):
+                st.session_state.pop(key, None)
+            st.rerun()
+
 voice_text: str | None = None
 if audio_value is not None:
     audio_bytes = audio_value.getvalue()
@@ -1977,22 +2056,36 @@ if user_input:
     # of crashing the whole app for this user.
     try:
         logger.info(f"User input: {user_input[:100]}")
+        has_image = bool(st.session_state.get("current_image_bytes"))
+        stored_text = f"🖼️ [Image attached] {user_input}" if has_image else user_input
         try:
-            append_message(session_id, "user", user_input)
+            append_message(session_id, "user", stored_text)
         except sqlite3.OperationalError as exc:
             logger.error(f"Failed to save user message: {exc}")
             st.warning("⚠️ Couldn't save your message right now, Sir — continuing anyway.")
 
         with st.chat_message("user"):
-            st.markdown(render_user_line(user_input))
+            st.markdown(render_user_line(stored_text))
 
         with st.chat_message("assistant"):
             response: str | None = None
             intent = detect_intent(user_input)
 
+            # Image attached: route straight to the vision model, bypassing
+            # both the time/date fast path and the tool orchestrator — an
+            # attached image is an unambiguous signal of what's needed.
+            if has_image:
+                logger.info("Image attached — routing to vision analysis")
+                response_container = st.empty()
+                response_container.markdown(render_thinking_indicator("Analyzing image"), unsafe_allow_html=True)
+                b64_image = base64.b64encode(st.session_state.current_image_bytes).decode("utf-8")
+                data_uri = f"data:{st.session_state.current_image_mime};base64,{b64_image}"
+                response = analyze_image(data_uri, user_input)
+                response_container.markdown(response)
+
             # Fast path: pure time/date questions never need a tool, so skip
             # the orchestrator's planning round-trip entirely.
-            if intent and intent.type == IntentType.TIME_DATE:
+            elif intent and intent.type == IntentType.TIME_DATE:
                 logger.info("Time/date query — routing directly to LLM (fast path)")
                 context = load_recent(session_id, limit=LLM_CONTEXT_LIMIT)
                 response_container = st.empty()
