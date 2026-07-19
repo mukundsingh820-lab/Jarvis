@@ -1,5 +1,6 @@
 # ── Imports ────────────────────────────────────────────────────────────────────
 import ast
+import hashlib
 import html
 import json
 import logging
@@ -577,7 +578,8 @@ def _search_tavily(query: str) -> SearchResponse | None:
             "api_key": TAVILY_API_KEY,
             "query": query,
             "max_results": 5,
-            "search_depth": "basic",
+            "search_depth": "advanced",   # deeper crawl + better ranking than "basic"
+            "include_answer": True,       # Tavily's own synthesized answer, when available
         },
         headers={"Content-Type": "application/json"},
     )
@@ -593,7 +595,12 @@ def _search_tavily(query: str) -> SearchResponse | None:
     ]
     if not results:
         return None
-    return SearchResponse(results=results[:5], source="Tavily")
+    tavily_answer = data.get("answer", "").strip()
+    if tavily_answer:
+        # Prepend Tavily's own synthesized answer as a pseudo-result so it
+        # feeds into the LLM's context alongside the raw source snippets.
+        results.insert(0, SearchResult(title="Direct Answer", snippet=tavily_answer, url=""))
+    return SearchResponse(results=results[:6], source="Tavily")
 
 @with_retry(max_attempts=2, base_delay=0.3, exceptions=(Exception,))
 def _search_wikipedia(query: str) -> SearchResponse | None:
@@ -904,6 +911,38 @@ def detect_intent(user_input: str) -> Optional[Intent]:
 _groq_client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
 _MODEL_STATE_KEY = "helix_active_model_index"
 
+WHISPER_MODEL: str = "whisper-large-v3-turbo"  # fast + free on Groq
+
+def transcribe_audio(audio_bytes: bytes) -> str | None:
+    """
+    Sends recorded audio to Groq's hosted Whisper model and returns the
+    transcript, Sir. Returns None (and shows a warning) on failure — voice
+    input degrades gracefully to 'please type instead' rather than crashing.
+    """
+    if not _groq_client:
+        st.warning("❌ GROQ_API_KEY is not configured, Sir — voice input unavailable.")
+        return None
+    try:
+        logger.info(f"Transcribing audio via Whisper ({len(audio_bytes)} bytes)")
+        transcription = _groq_client.audio.transcriptions.create(
+            file=("voice_input.wav", audio_bytes),
+            model=WHISPER_MODEL,
+            response_format="text",
+        )
+        text = str(transcription).strip()
+        if not text:
+            st.warning("⚠️ Didn't catch anything in that recording, Sir — please try again.")
+            return None
+        logger.info(f"Transcription result: '{text[:100]}'")
+        return text
+    except RateLimitError:
+        st.warning("⚠️ Voice transcription rate limited, Sir — please try again shortly.")
+        return None
+    except Exception as exc:
+        logger.error(f"Whisper transcription failed: {exc}")
+        st.warning("⚠️ Couldn't transcribe that recording, Sir — please try again or type instead.")
+        return None
+
 def _build_system_prompt() -> str:
     current_time = datetime.now(IST).strftime("%A, %d %B %Y, %I:%M %p")
     return SYSTEM_PROMPT_TEMPLATE.format(current_time=current_time)
@@ -1095,7 +1134,12 @@ def _execute_tool(name: str, args: dict) -> str:
             query = args.get("query", "")
             search = web_search(query)
             if search.success:
-                return "\n".join(r.clean_snippet(200) for r in search.results[:3])
+                lines = []
+                for r in search.results[:4]:
+                    snippet = r.clean_snippet(220)
+                    source_tag = f" (Source: {r.title}, {r.url})" if r.url else f" (Source: {r.title})"
+                    lines.append(f"{snippet}{source_tag}")
+                return "\n".join(lines)
             return search.error or "No results found."
 
         return f"Unknown tool requested: {name}"
@@ -1159,7 +1203,9 @@ def run_orchestrator(conversation: list[dict], container=None) -> str:
             + "\n\nYou may call the available tools, including multiple tools in the same turn "
               "or across turns, to fully answer requests with several parts (e.g. weather AND a "
               "calculation). Only call a tool when the request genuinely needs it — for normal "
-              "conversation, just reply directly with no tool calls."
+              "conversation, just reply directly with no tool calls. When you use web_search "
+              "results, briefly cite the source name in your answer (e.g. 'according to Reuters...') "
+              "so the user knows where the information came from."
         ),
     }]
     planning_messages.extend(conversation[-LLM_CONTEXT_LIMIT:])
@@ -1819,7 +1865,26 @@ for msg in history:
         else:
             st.markdown(f"**🧬 HELIX:** {msg['content']}")
 
-user_input: str | None = st.chat_input("Speak or type, Sir...")
+with st.expander("🎙️ Speak instead of typing, Sir"):
+    audio_value = st.audio_input("Record a voice message")
+
+voice_text: str | None = None
+if audio_value is not None:
+    audio_bytes = audio_value.getvalue()
+    audio_hash = hashlib.md5(audio_bytes).hexdigest()
+    # Guard against re-transcribing the same recording on every Streamlit
+    # rerun — st.audio_input keeps returning the last recording until a new
+    # one is made, so we only act on genuinely new audio.
+    if st.session_state.get("last_audio_hash") != audio_hash:
+        st.session_state.last_audio_hash = audio_hash
+        with st.spinner("🎙️ Transcribing, Sir…"):
+            voice_text = transcribe_audio(audio_bytes)
+
+typed_input: str | None = st.chat_input("Speak or type, Sir...")
+
+# Either the typed box or a fresh voice recording can trigger a turn — typed
+# input takes priority if somehow both arrive in the same rerun.
+user_input: str | None = typed_input or voice_text
 
 if user_input:
     # FIX #3: the entire turn is wrapped so any unexpected exception (LLM
