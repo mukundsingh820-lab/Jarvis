@@ -1759,8 +1759,93 @@ def inject_styles(theme_name: str = "dark") -> None:
             0%,100% {{ opacity: 0.20; transform: scale(0.65); }}
             50%      {{ opacity: 1;   transform: scale(1.40); }}
         }}
+
+        /* ── "Thinking" indicator: shown the instant a message is sent,
+           before the streamed answer replaces it ── */
+        .helix-thinking {{
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            padding: 8px 4px;
+            animation: thinkingFadeIn 0.35s ease both;
+        }}
+        .helix-thinking-dot {{
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, {t['accent']}, {t['accent3']});
+            box-shadow: 0 0 10px {t['accent']}99;
+            animation: thinkingBounce 1.1s ease-in-out infinite;
+        }}
+        .helix-thinking-dot:nth-child(2) {{
+            background: linear-gradient(135deg, {t['accent2']}, {t['gold']});
+            box-shadow: 0 0 10px {t['accent2']}99;
+            animation-delay: 0.15s;
+        }}
+        .helix-thinking-dot:nth-child(3) {{
+            background: linear-gradient(135deg, {t['accent3']}, {t['accent']});
+            box-shadow: 0 0 10px {t['accent3']}99;
+            animation-delay: 0.3s;
+        }}
+        @keyframes thinkingBounce {{
+            0%, 60%, 100% {{ transform: translateY(0) scale(1); opacity: 0.5; }}
+            30%           {{ transform: translateY(-9px) scale(1.2); opacity: 1; }}
+        }}
+        @keyframes thinkingFadeIn {{
+            0%   {{ opacity: 0; transform: translateY(4px); }}
+            100% {{ opacity: 1; transform: translateY(0); }}
+        }}
+        .helix-thinking-label {{
+            font-size: 10.5px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: rgba(255,255,255,0.38);
+            margin-left: 3px;
+        }}
+
+        /* ── Voice recorder + its expander: give it some of the same glass
+           treatment as the rest of the UI instead of default Streamlit grey ── */
+        [data-testid="stAudioInput"] {{
+            background: linear-gradient(135deg, rgba(255,255,255,0.09) 0%, rgba(255,255,255,0.03) 100%) !important;
+            border: 1px solid rgba(255,255,255,0.16) !important;
+            border-radius: 20px !important;
+            padding: 6px 10px !important;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.10) !important;
+            transition: box-shadow 0.3s ease, border-color 0.3s ease !important;
+        }}
+        [data-testid="stAudioInput"]:focus-within,
+        [data-testid="stAudioInput"]:hover {{
+            border-color: {t['accent']}55 !important;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.26), 0 0 24px {t['accent']}22 !important;
+        }}
+        [data-testid="stExpander"] {{
+            background: rgba(255,255,255,0.04) !important;
+            border: 1px solid rgba(255,255,255,0.10) !important;
+            border-radius: 18px !important;
+            transition: border-color 0.25s ease !important;
+        }}
+        [data-testid="stExpander"]:hover {{
+            border-color: {t['accent']}44 !important;
+        }}
+
+        /* ── New chat bubbles ease in from below + fade, on top of the
+           existing left/right bounce, for a slightly softer arrival ── */
+        [data-testid="stChatMessage"] {{
+            animation-fill-mode: both !important;
+        }}
     </style>
     """, unsafe_allow_html=True)
+
+def render_thinking_indicator(label: str = "Thinking") -> str:
+    """Small pulsing gradient dot-wave shown while HELIX is working, Sir."""
+    return f"""
+    <div class='helix-thinking'>
+        <div class='helix-thinking-dot'></div>
+        <div class='helix-thinking-dot'></div>
+        <div class='helix-thinking-dot'></div>
+        <span class='helix-thinking-label'>{html.escape(label)}</span>
+    </div>
+    """
 
 def render_header(accent_color: str) -> None:
     st.markdown("""
@@ -1911,6 +1996,7 @@ if user_input:
                 logger.info("Time/date query — routing directly to LLM (fast path)")
                 context = load_recent(session_id, limit=LLM_CONTEXT_LIMIT)
                 response_container = st.empty()
+                response_container.markdown(render_thinking_indicator("Thinking"), unsafe_allow_html=True)
                 response = stream_response(context, container=response_container)
             else:
                 # Everything else — including compound requests that need
@@ -1921,6 +2007,7 @@ if user_input:
                 logger.info("Routing to orchestrator")
                 context = load_recent(session_id, limit=LLM_CONTEXT_LIMIT)
                 response_container = st.empty()
+                response_container.markdown(render_thinking_indicator("Orchestrating"), unsafe_allow_html=True)
                 response = run_orchestrator(context, container=response_container)
 
             if response:
