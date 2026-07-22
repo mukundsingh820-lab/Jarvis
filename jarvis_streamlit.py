@@ -2313,6 +2313,77 @@ def render_copy_button(text: str, key: str) -> None:
     except Exception as exc:
         logger.warning(f"Copy button failed to render: {exc}")
 
+@st.fragment
+def render_read_aloud_control(text: str, key: str) -> None:
+    """
+    A self-contained 'read aloud' button + player for one message.
+    PERF: wrapped in @st.fragment so clicking it only re-executes this small
+    block, Sir — not the whole script. Before this, every TTS click forced a
+    full rerun: re-injecting the entire CSS <style> block, re-querying
+    psutil for CPU/RAM, and reloading chat history + long-term memory from
+    SQLite, just to play one audio clip. None of that touches this button's
+    own output, so scoping it here cuts that click down to "generate audio,
+    show player" and nothing else.
+    """
+    if st.button("🔊 Read aloud", key=key):
+        with st.spinner("🔊 Generating audio, Sir…"):
+            audio_bytes = generate_speech(text)
+        if audio_bytes:
+            st.audio(audio_bytes, format="audio/wav", autoplay=True)
+
+@st.fragment
+def render_long_term_memory_section(session_id: str) -> None:
+    """
+    The sidebar's memory-key input + facts/reminders lists, Sir.
+    PERF: this entire block is scoped as its own fragment. Typing a memory
+    key, or clearing facts/reminders, only affects what's rendered inside
+    this fragment — it never touches the main chat history, so none of
+    those interactions need to re-run the rest of the app (CSS injection,
+    psutil stats, history reload) to take effect. The two 'clear' buttons
+    use st.rerun(scope="fragment") rather than a bare st.rerun() for the
+    same reason — a full-app rerun here would be pure waste, since nothing
+    outside this box changes.
+    """
+    st.markdown("### 🧠 LONG-TERM MEMORY")
+    st.caption(
+        "Set a memory key to let HELIX recall facts/reminders across visits — "
+        "just a shared phrase, not real login security. Leave blank to only "
+        "remember for this session."
+    )
+    memory_key = st.text_input("Memory key (optional)", type="password", key="memory_key_input")
+    if memory_key.strip():
+        active_profile_id = hashlib.sha256(f"helix_profile:{memory_key.strip()}".encode()).hexdigest()
+    else:
+        active_profile_id = session_id  # session-only: resets on a new tab/session
+    st.session_state.active_profile_id = active_profile_id
+
+    try:
+        st.session_state.active_profile_facts = load_facts(active_profile_id)
+        st.session_state.active_profile_reminders = load_reminders(active_profile_id)
+    except sqlite3.OperationalError:
+        st.session_state.setdefault("active_profile_facts", [])
+        st.session_state.setdefault("active_profile_reminders", [])
+        st.warning("⚠️ Couldn't load long-term memory right now, Sir.")
+
+    facts_now = st.session_state.get("active_profile_facts", [])
+    reminders_now = st.session_state.get("active_profile_reminders", [])
+    if facts_now:
+        with st.expander(f"📋 {len(facts_now)} remembered fact(s)"):
+            for f in facts_now:
+                st.write(f"• {f}")
+            if st.button("🗑️ Forget all facts", use_container_width=True, key="forget_facts_btn"):
+                clear_facts(active_profile_id)
+                st.session_state.active_profile_facts = []
+                st.rerun(scope="fragment")
+    if reminders_now:
+        with st.expander(f"⏰ {len(reminders_now)} reminder(s)"):
+            for r in reminders_now:
+                st.write(f"• {r}")
+            if st.button("🗑️ Clear reminders", use_container_width=True, key="clear_reminders_btn"):
+                clear_reminders(active_profile_id)
+                st.session_state.active_profile_reminders = []
+                st.rerun(scope="fragment")
+
 # ── App ────────────────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="HELIX - AI Assistant",
@@ -2364,45 +2435,7 @@ with st.sidebar:
         st.rerun()  # needed: history list must disappear immediately
     st.divider()
 
-    st.markdown("### 🧠 LONG-TERM MEMORY")
-    st.caption(
-        "Set a memory key to let HELIX recall facts/reminders across visits — "
-        "just a shared phrase, not real login security. Leave blank to only "
-        "remember for this session."
-    )
-    memory_key = st.text_input("Memory key (optional)", type="password", key="memory_key_input")
-    if memory_key.strip():
-        active_profile_id = hashlib.sha256(f"helix_profile:{memory_key.strip()}".encode()).hexdigest()
-    else:
-        active_profile_id = session_id  # session-only: resets on a new tab/session
-    st.session_state.active_profile_id = active_profile_id
-
-    try:
-        st.session_state.active_profile_facts = load_facts(active_profile_id)
-        st.session_state.active_profile_reminders = load_reminders(active_profile_id)
-    except sqlite3.OperationalError:
-        st.session_state.setdefault("active_profile_facts", [])
-        st.session_state.setdefault("active_profile_reminders", [])
-        st.warning("⚠️ Couldn't load long-term memory right now, Sir.")
-
-    facts_now = st.session_state.get("active_profile_facts", [])
-    reminders_now = st.session_state.get("active_profile_reminders", [])
-    if facts_now:
-        with st.expander(f"📋 {len(facts_now)} remembered fact(s)"):
-            for f in facts_now:
-                st.write(f"• {f}")
-            if st.button("🗑️ Forget all facts", use_container_width=True, key="forget_facts_btn"):
-                clear_facts(active_profile_id)
-                st.session_state.active_profile_facts = []
-                st.rerun()
-    if reminders_now:
-        with st.expander(f"⏰ {len(reminders_now)} reminder(s)"):
-            for r in reminders_now:
-                st.write(f"• {r}")
-            if st.button("🗑️ Clear reminders", use_container_width=True, key="clear_reminders_btn"):
-                clear_reminders(active_profile_id)
-                st.session_state.active_profile_reminders = []
-                st.rerun()
+    render_long_term_memory_section(session_id)
     st.divider()
 
     st.markdown("### 📄 EXPORT CHAT")
@@ -2464,11 +2497,7 @@ for i, msg in enumerate(history):
         else:
             st.markdown(f"**🧬 HELIX:** {msg['content']}")
             render_copy_button(msg["content"], key=f"hist_{i}")
-            if st.button("🔊 Read aloud", key=f"speak_hist_{i}"):
-                with st.spinner("🔊 Generating audio, Sir…"):
-                    audio_bytes = generate_speech(msg["content"])
-                if audio_bytes:
-                    st.audio(audio_bytes, format="audio/wav", autoplay=True)
+            render_read_aloud_control(msg["content"], key=f"speak_hist_{i}")
 
 with st.expander("🎙️ Speak instead of typing, Sir"):
     audio_value = st.audio_input("Record a voice message")
@@ -2568,11 +2597,7 @@ if user_input:
             if response:
                 live_key_suffix = f"{session_id[:8]}_{int(time.time()*1000)}"
                 render_copy_button(response, key=f"live_{live_key_suffix}")
-                if st.button("🔊 Read aloud", key=f"speak_live_{live_key_suffix}"):
-                    with st.spinner("🔊 Generating audio, Sir…"):
-                        audio_bytes = generate_speech(response)
-                    if audio_bytes:
-                        st.audio(audio_bytes, format="audio/wav", autoplay=True)
+                render_read_aloud_control(response, key=f"speak_live_{live_key_suffix}")
                 try:
                     append_message(session_id, "assistant", response)
                     logger.info(f"Response saved ({len(response)} chars)")
