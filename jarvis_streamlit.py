@@ -26,7 +26,6 @@ import httpx
 import psutil
 import pytz
 import streamlit as st
-import streamlit.components.v1 as components
 from dotenv import load_dotenv
 from groq import Groq, RateLimitError, APIConnectionError, APIStatusError
 
@@ -2278,11 +2277,11 @@ def render_user_line(text: str) -> str:
 def render_copy_button(text: str, key: str) -> None:
     """
     A small 'copy to clipboard' button under an assistant message. Uses
-    components.html (its own sandboxed iframe with working JS) rather than
-    a <script> tag inside st.markdown, which Streamlit often strips.
-    NOTE: Streamlit flags this as deprecated in favor of st.iframe, but that
-    API doesn't yet support raw HTML (srcdoc) the same way — reverted here
-    since a working button with a harmless console warning beats a broken one.
+    st.iframe (its own sandboxed iframe with working JS) rather than a
+    <script> tag inside st.markdown, which Streamlit often strips.
+    st.iframe auto-detects a raw HTML string and renders it via srcdoc,
+    which is what this needs — components.html/components.v1 is deprecated
+    and slated for removal, so this avoids depending on it.
     Wrapped defensively so any future Streamlit API change degrades to
     "no copy button" instead of crashing the whole response.
     """
@@ -2309,7 +2308,7 @@ def render_copy_button(text: str, key: str) -> None:
         </div>
         """
     try:
-        components.html(html_content, height=32)
+        st.iframe(html_content, height=32)
     except Exception as exc:
         logger.warning(f"Copy button failed to render: {exc}")
 
